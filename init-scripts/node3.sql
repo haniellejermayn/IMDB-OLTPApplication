@@ -1,7 +1,4 @@
-SOURCE /docker-entrypoint-initdb.d/create_schema.sql;
-
--- This will load ONLY non-movies
-LOAD DATA LOCAL INFILE '/var/lib/mysql-files/node3_non_movies.csv'
+LOAD DATA INFILE '/var/lib/mysql-files/node3_non_movies.csv'
 INTO TABLE titles
 FIELDS TERMINATED BY ',' 
 ENCLOSED BY '"'

@@ -1,6 +1,4 @@
-SOURCE /docker-entrypoint-initdb.d/create_schema.sql;
-
-LOAD DATA LOCAL INFILE '/var/lib/mysql-files/node1_all_titles.csv'
+LOAD DATA INFILE '/var/lib/mysql-files/node1_all_titles.csv'
 INTO TABLE titles
 FIELDS TERMINATED BY ',' 
 ENCLOSED BY '"'

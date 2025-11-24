@@ -21,15 +21,15 @@ def process_imdb(generate_node1, generate_node2, generate_node3):
     
     if generate_node1:
         files_to_open['all'] = open(output_all, 'w', newline='', encoding='utf-8')
-        writers['all'] = csv.writer(files_to_open['all'])
+        writers['all'] = csv.writer(files_to_open['all'], quoting=csv.QUOTE_NONE, escapechar='\\')
         
     if generate_node2:
         files_to_open['movies'] = open(output_movies, 'w', newline='', encoding='utf-8')
-        writers['movies'] = csv.writer(files_to_open['movies'])
+        writers['movies'] = csv.writer(files_to_open['movies'], quoting=csv.QUOTE_NONE, escapechar='\\')
         
     if generate_node3:
         files_to_open['nonmovies'] = open(output_nonmovies, 'w', newline='', encoding='utf-8')
-        writers['nonmovies'] = csv.writer(files_to_open['nonmovies'])
+        writers['nonmovies'] = csv.writer(files_to_open['nonmovies'], quoting=csv.QUOTE_NONE, escapechar='\\')
     
     header = ['tconst', 'title_type', 'primary_title', 'start_year', 'runtime_minutes', 'genres']
     for writer in writers.values():
@@ -48,11 +48,11 @@ def process_imdb(generate_node1, generate_node2, generate_node3):
                 int(row['startYear']) >= 2000 and
                 count < 40000):  # Stop at 40k rows
                 
-                # Clean data
+                # Clean data 
                 year = row['startYear']
                 runtime = row['runtimeMinutes']
-                genres = row['genres'].replace('\\N', 'Unknown')
-                title = row['primaryTitle'].replace('"', '""')
+                genres = row['genres'].replace('\\N', 'Unknown').replace(',', ';')  
+                title = row['primaryTitle'].replace('"', '').replace(',', ' ')  
                 title_type = row['titleType']
                 tconst = row['tconst']
                 
