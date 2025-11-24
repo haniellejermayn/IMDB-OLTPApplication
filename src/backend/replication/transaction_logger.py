@@ -3,6 +3,8 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+# TODO: give each node its own transaction log table for better tracking
+
 class TransactionLogger:
     def __init__(self, db_manager):
         self.db = db_manager
