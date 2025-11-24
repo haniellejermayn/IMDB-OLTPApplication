@@ -11,16 +11,19 @@ class ReplicationManager:
         self.db = db_manager
         self.failed_transactions_queue = Queue() # queue for failed replications
         
-    def log_transaction(self, node_id, operation, tconst, status, error_message=None):
-        """Log transaction to transaction_log table"""
+    def log_transaction(self, node_id, operation_type, record_id, table_name='titles', replicated=False):
         query = """
-            INSERT INTO transaction_log (node_id, operation, tconst, status, error_message)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO transaction_log (transaction_id, node_id, operation_type, table_name, record_id, replicated)
+            VALUES (UUID(), %s, %s, %s, %s, %s)
         """
-        try:
-            self.db.execute_query('node1', query, (node_id, operation, tconst, status, error_message))
-        except Exception as e:
-            logger.error(f"Failed to log transaction: {e}")
+        result = self.db.execute_query(
+            'node1',
+            query,
+            (node_id, operation_type, table_name, record_id, replicated)
+        )
+        if not result['success']:
+            logger.error(f"Failed to log transaction: {result.get('error')}")
+
     
     def insert_title(self, data):
         """Insert title with replication to appropriate nodes"""

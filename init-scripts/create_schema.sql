@@ -22,7 +22,7 @@ CREATE TABLE titles (
 CREATE TABLE transaction_log (
     log_id INT AUTO_INCREMENT PRIMARY KEY,
     transaction_id VARCHAR(50) NOT NULL,
-    node_id INT NOT NULL,
+    node_id VARCHAR(10) NOT NULL,
     operation_type ENUM('INSERT', 'UPDATE', 'DELETE') NOT NULL,
     table_name VARCHAR(50) NOT NULL,
     record_id VARCHAR(20) NOT NULL,
