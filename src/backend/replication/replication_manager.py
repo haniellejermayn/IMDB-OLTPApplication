@@ -33,7 +33,6 @@ class ReplicationManager:
         
         results = {}
         
-        # master-slave approach: fragment first then central
         # insert to fragment
         result_frag = self.db.execute_query(target_node, query, params)
         results[target_node] = result_frag
