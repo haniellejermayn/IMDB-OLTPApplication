@@ -1,4 +1,25 @@
 services:
+  # Backend API
+  backend:
+    build: ./src/backend
+    container_name: distributed-backend
+    ports:
+      - "5000:5000"
+    depends_on:
+      mysql-node1:
+        condition: service_healthy
+      mysql-node2:
+        condition: service_healthy
+      mysql-node3:
+        condition: service_healthy
+    networks:
+      - distributed-net
+    environment:
+      - FLASK_ENV=development
+    volumes:
+      - ./src/backend:/app
+    command: python app.py
+
   # Node 1 - Central (all data)
   mysql-node1:
     image: mysql:8.0

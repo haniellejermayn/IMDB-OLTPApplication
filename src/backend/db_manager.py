@@ -1,40 +1,82 @@
 import mysql.connector
 from mysql.connector import Error
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
 class DatabaseManager:
     def __init__(self):
         self.nodes = {
-            'node1': {'host': 'mysql-node1', 'port': 3306, 'db': 'imdb_distributed'},
-            'node2': {'host': 'mysql-node2', 'port': 3306, 'db': 'imdb_distributed'},
-            'node3': {'host': 'mysql-node3', 'port': 3306, 'db': 'imdb_distributed'}
+            'node1': {'host': 'node1-central', 'port': 3306, 'db': 'imdb_distributed'},
+            'node2': {'host': 'node2-movies', 'port': 3306, 'db': 'imdb_distributed'},
+            'node3': {'host': 'node3-nonmovies', 'port': 3306, 'db': 'imdb_distributed'}
         }
         self.user = 'root'
         self.password = 'password123'
+        
+        # Wait for nodes to be ready on startup
+        self._wait_for_nodes()
     
-    def get_connection(self, node_name, isolation_level='READ-COMMITTED'):
-        """Get database connection with specified isolation level"""
-        try:
-            node = self.nodes[node_name]
-            conn = mysql.connector.connect(
-                host=node['host'],
-                port=node['port'],
-                database=node['db'],
-                user=self.user,
-                password=self.password
-            )
-            
-            # Set isolation level
-            cursor = conn.cursor()
-            cursor.execute(f"SET SESSION TRANSACTION ISOLATION LEVEL {isolation_level}")
-            cursor.close()
-            
-            return conn
-        except Error as e:
-            logger.error(f"Error connecting to {node_name}: {e}")
-            return None
+    def _wait_for_nodes(self, max_retries=30, delay=2):
+        """Wait for all database nodes to be ready"""
+        logger.info("Waiting for database nodes to be ready...")
+        
+        for node_name in self.nodes.keys():
+            retries = 0
+            while retries < max_retries:
+                try:
+                    conn = self._create_connection(node_name)
+                    if conn:
+                        conn.close()
+                        logger.info(f"✓ {node_name} is ready")
+                        break
+                except Exception as e:
+                    retries += 1
+                    if retries >= max_retries:
+                        logger.error(f"✗ {node_name} failed to connect after {max_retries} attempts")
+                        raise Exception(f"Could not connect to {node_name}")
+                    logger.warning(f"⟳ {node_name} not ready, retrying ({retries}/{max_retries})...")
+                    time.sleep(delay)
+        
+        logger.info("All database nodes are ready!")
+    
+    def _create_connection(self, node_name):
+        """Create raw connection without isolation level setting"""
+        node = self.nodes[node_name]
+        return mysql.connector.connect(
+            host=node['host'],
+            port=node['port'],
+            database=node['db'],
+            user=self.user,
+            password=self.password,
+            connect_timeout=5
+        )
+    
+    def get_connection(self, node_name, isolation_level='READ COMMITTED', retries=3):
+        """Get database connection with specified isolation level and retry logic"""
+        last_error = None
+        
+        for attempt in range(retries):
+            try:
+                conn = self._create_connection(node_name)
+                
+                # Set isolation level
+                cursor = conn.cursor()
+                cursor.execute(f"SET SESSION TRANSACTION ISOLATION LEVEL {isolation_level}")
+                cursor.close()
+                
+                return conn
+                
+            except Error as e:
+                last_error = e
+                if attempt < retries - 1:
+                    logger.warning(f"Connection attempt {attempt + 1} failed for {node_name}, retrying...")
+                    time.sleep(1)
+                else:
+                    logger.error(f"Error connecting to {node_name} after {retries} attempts: {e}")
+        
+        return None
     
     def check_all_nodes(self):
         """Check health of all nodes"""
@@ -42,8 +84,23 @@ class DatabaseManager:
         for node_name in self.nodes.keys():
             conn = self.get_connection(node_name)
             if conn:
-                status[node_name] = {'status': 'online', 'healthy': True}
-                conn.close()
+                try:
+                    cursor = conn.cursor(dictionary=True)
+                    cursor.execute("SELECT COUNT(*) as count FROM titles")
+                    result = cursor.fetchone()
+                    status[node_name] = {
+                        'status': 'online',
+                        'healthy': True,
+                        'record_count': result['count']
+                    }
+                except Error as e:
+                    status[node_name] = {
+                        'status': 'online',
+                        'healthy': False,
+                        'error': str(e)
+                    }
+                finally:
+                    conn.close()
             else:
                 status[node_name] = {'status': 'offline', 'healthy': False}
         return status
@@ -113,7 +170,7 @@ class DatabaseManager:
         finally:
             conn.close()
     
-    def execute_query(self, node_name, query, params=None, isolation_level='READ-COMMITTED'):
+    def execute_query(self, node_name, query, params=None, isolation_level='READ COMMITTED'):
         """Execute query on specific node"""
         conn = self.get_connection(node_name, isolation_level)
         
