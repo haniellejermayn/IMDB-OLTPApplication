@@ -4,6 +4,7 @@ from .recovery_handler import RecoveryHandler
 
 logger = logging.getLogger(__name__)
 
+# TODO: change all operations to be CENTRAL first, then fragment
 # TODO: Optional lightweight conflict detection
 # Compare existing DB values with intended update before writing
 # Log a warning if there’s a difference to track potential concurrent updates
@@ -15,7 +16,7 @@ class ReplicationManager:
         self.recovery_handler = RecoveryHandler(db_manager, self.transaction_logger)
     
     def insert_title(self, data):
-        """Insert title with replication to appropriate nodes"""
+        """Insert title"""
         tconst = data.get('tconst')
         title_type = data.get('title_type')
         
@@ -37,30 +38,30 @@ class ReplicationManager:
         
         results = {}
         
-        # insert to fragment
-        result_frag = self.db.execute_query(target_node, query, params)
-        results[target_node] = result_frag
+        # insert to central
+        result_central = self.db.execute_query('node1', query, params)
+        results['node1'] = result_central
         
-        if result_frag['success']:
-            self.log_transaction(target_node, 'INSERT', tconst, 'SUCCESS', None)
+        if result_central['success']:
+            self.log_transaction('node1', 'INSERT', tconst, 'SUCCESS', None)
             
-            # replicate to central
-            result1 = self.db.execute_query('node1', query, params)
-            results['node1'] = result1
+            # replicate to fragment
+            result_frag = self.db.execute_query(target_node, query, params)
+            results[target_node] = result_frag
             
-            if result1['success']:
-                self.log_transaction('node1', 'INSERT', tconst, 'SUCCESS', None)
+            if result_frag['success']:
+                self.log_transaction(target_node, 'INSERT', tconst, 'SUCCESS', None)
             else:
-                # Case #1: Failed to replicate to central
-                self.log_transaction('node1', 'INSERT', tconst, 'FAILED', result1.get('error'))
-                self._queue_failed_replication('node1', 'INSERT', query, params, tconst)
-                logger.warning(f"Failed to replicate INSERT to node1 for {tconst}, queued for retry")
+                # Case #1: Failed to replicate to fragment (queue for recovery)
+                self.log_transaction(target_node, 'INSERT', tconst, 'FAILED', result_frag.get('error'))
+                self._queue_failed_replication(target_node, 'INSERT', query, params, tconst)
+                logger.warning(f"Failed to replicate INSERT to {target_node} for {tconst}, queued for retry")
         else:
-            self.log_transaction(target_node, 'INSERT', tconst, 'FAILED', result_frag.get('error'))
+            self.log_transaction('node1', 'INSERT', tconst, 'FAILED', result_central.get('error'))
         
         return {
-            'success': result_frag['success'],
-            'replicated_to_central': results.get('node1', {}).get('success', False),
+            'success': result_central['success'],
+            'replicated_to_fragment': results.get(target_node, {}).get('success', False),
             'results': results
         }
     
