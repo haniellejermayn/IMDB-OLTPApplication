@@ -4,6 +4,8 @@ from db_manager import DatabaseManager
 from replication.replication_manager import ReplicationManager
 import logging
 
+# TODO: add search endpoint with filters
+
 app = Flask(__name__)
 CORS(app)
 
@@ -12,6 +14,9 @@ logger = logging.getLogger(__name__)
 
 db_manager = DatabaseManager()
 replication_manager = ReplicationManager(db_manager)
+
+replication_manager.recovery_handler.start_automatic_retry()
+logger.info("Application started with automatic replication retry enabled")
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -136,6 +141,24 @@ def recovery_status():
     """Get pending replication count"""
     result = replication_manager.get_pending_replications()
     return jsonify(result)
+
+@app.route('/recovery/auto-retry', methods=['POST'])
+def control_auto_retry():
+    """
+    Start or stop automatic retry
+    POST /recovery/auto-retry
+    Body: {"action": "start"} or {"action": "stop"}
+    """
+    action = request.json.get('action', 'start')
+    
+    if action == 'start':
+        replication_manager.recovery_handler.start_automatic_retry()
+        return jsonify({'message': 'Automatic retry started'})
+    elif action == 'stop':
+        replication_manager.recovery_handler.stop_automatic_retry()
+        return jsonify({'message': 'Automatic retry stopped'})
+    else:
+        return jsonify({'error': 'Invalid action. Use "start" or "stop"'}), 400
 
 @app.route('/logs', methods=['GET'])
 def get_transaction_logs():
