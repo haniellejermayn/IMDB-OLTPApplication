@@ -1,0 +1,44 @@
+services:
+  mysql-node3:
+    image: mysql:8.0
+    container_name: node3-nonmovies
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: password123
+      MYSQL_DATABASE: imdb_distributed
+    ports:
+      - "3306:3306"
+    volumes:
+      - node3_data:/var/lib/mysql
+      - ../../data/node3_non_movies.csv:/var/lib/mysql-files/node3_non_movies.csv
+      - ../../init-scripts/create_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ../../init-scripts/node3.sql:/docker-entrypoint-initdb.d/02-data.sql
+    command: --local-infile=1 --secure-file-priv=/var/lib/mysql-files --bind-address=0.0.0.0
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-ppassword123"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ../../src/backend
+    container_name: distributed-backend
+    restart: always
+    ports:
+      - "5000:5000"
+    depends_on:
+      mysql-node3:
+        condition: service_healthy
+    environment:
+      - FLASK_ENV=production
+      - NODE1_HOST=${VM1_IP:-10.2.14.57}
+      - NODE1_PORT=3306
+      - NODE2_HOST=${VM2_IP:-10.2.14.58}
+      - NODE2_PORT=3306
+      - NODE3_HOST=mysql-node3
+      - NODE3_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=password123
+
+volumes:
+  node3_data:
