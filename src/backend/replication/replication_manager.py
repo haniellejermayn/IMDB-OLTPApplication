@@ -18,10 +18,11 @@ class ReplicationManager:
     
     def insert_title(self, data):
         """
-        Insert flow:
-        1. Write to primary fragment (Node 2 or 3)
-        2. Replicate to central (Node 1)
-        3. Log everything to source node's transaction_log
+        Insert flow with bidirectional support:
+        1. Try primary fragment (Node 2 or 3)
+        2. If fragment down, use central as fallback
+        3. Replicate to the other node
+        4. Log everything for recovery
         """
         tconst = data.get('tconst')
         title_type = data.get('title_type')
@@ -44,81 +45,103 @@ class ReplicationManager:
         
         results = {}
         
-        # Write to primary fragment
+        # Try primary fragment first
         result_primary = self.db.execute_query(primary_node, query, params)
         results[primary_node] = result_primary
         
-        if not result_primary['success']:
-            # Primary write failed - REAL failure
-            logger.error(
-                f"✗ PRIMARY WRITE FAILED on {primary_node} for {tconst}: "
-                f"{result_primary.get('error')}"
-            )
-            return {
-                'success': False,
-                'error': result_primary.get('error'),
-                'message': f'Insert failed at primary node {primary_node}',
-                'results': results
-            }
-        
-        logger.info(f"✓ INSERT to PRIMARY {primary_node} succeeded for {tconst}")
-        
-        # Write to central node
-        result_central = self.db.execute_query(central_node, query, params)
-        results[central_node] = result_central
-        
-        if result_central['success']:
-            # Success - log as completed
-            self.transaction_logger.log_replication(
-                source_node=primary_node,
-                target_node=central_node,
-                operation_type='INSERT',
-                record_id=tconst,
-                query=query,
-                params=params,
-                status='SUCCESS'
-            )
-            logger.info(f"✓ INSERT replicated to CENTRAL {central_node} for {tconst}")
+        if result_primary['success']:
+            # Fragment succeeded - replicate to central
+            logger.info(f"✓ INSERT to PRIMARY {primary_node} succeeded for {tconst}")
             
-            return {
-                'success': True,
-                'primary_node': primary_node,
-                'replicated_to_central': True,
-                'results': results,
-                'message': f'Insert committed to {primary_node} and replicated to {central_node}'
-            }
-        else:
-            # Replication failed - log as PENDING for retry
-            transaction_id = self.transaction_logger.log_replication(
-                source_node=primary_node,
-                target_node=central_node,
-                operation_type='INSERT',
-                record_id=tconst,
-                query=query,
-                params=params,
-                status='PENDING',
-                error_msg=result_central.get('error')
-            )
+            result_central = self.db.execute_query(central_node, query, params)
+            results[central_node] = result_central
             
-            logger.warning(
-                f"⚠ REPLICATION FAILED: {primary_node} → {central_node} for {tconst}. "
-                f"Transaction {transaction_id} logged as PENDING for automatic retry."
-            )
-            
-            return {
-                'success': True,  # Primary succeeded
-                'primary_node': primary_node,
-                'replicated_to_central': False,
-                'transaction_id': transaction_id,
-                'results': results,
-                'message': (
-                    f'Insert committed to {primary_node}. '
-                    f'Replication to {central_node} failed but queued for retry.'
+            if result_central['success']:
+                self.transaction_logger.log_replication(
+                    source_node=primary_node,
+                    target_node=central_node,
+                    operation_type='INSERT',
+                    record_id=tconst,
+                    query=query,
+                    params=params,
+                    status='SUCCESS'
                 )
-            }
+                logger.info(f"✓ INSERT replicated to CENTRAL {central_node} for {tconst}")
+                
+                return {
+                    'success': True,
+                    'primary_node': primary_node,
+                    'replicated_to': central_node,
+                    'results': results,
+                    'message': f'Insert committed to {primary_node} and replicated to {central_node}'
+                }
+            else:
+                # Central replication failed - queue for retry
+                transaction_id = self.transaction_logger.log_replication(
+                    source_node=primary_node,
+                    target_node=central_node,
+                    operation_type='INSERT',
+                    record_id=tconst,
+                    query=query,
+                    params=params,
+                    status='PENDING',
+                    error_msg=result_central.get('error')
+                )
+                
+                logger.warning(f"⚠ REPLICATION FAILED: {primary_node} → {central_node} for {tconst}. Queued.")
+                
+                return {
+                    'success': True,
+                    'primary_node': primary_node,
+                    'replicated_to': None,
+                    'pending_replication': central_node,
+                    'transaction_id': transaction_id,
+                    'results': results,
+                    'message': f'Insert committed to {primary_node}. Replication to {central_node} queued.'
+                }
+        else:
+            # Fragment down - try central as fallback
+            logger.warning(f"⚠ PRIMARY {primary_node} unavailable, using central as fallback for {tconst}")
+            
+            result_central = self.db.execute_query(central_node, query, params)
+            results[central_node] = result_central
+            
+            if result_central['success']:
+                # Central worked - queue replication to fragment
+                transaction_id = self.transaction_logger.log_replication(
+                    source_node=central_node,
+                    target_node=primary_node,
+                    operation_type='INSERT',
+                    record_id=tconst,
+                    query=query,
+                    params=params,
+                    status='PENDING',
+                    error_msg=f'{primary_node} was unavailable'
+                )
+                
+                logger.info(f"✓ INSERT to CENTRAL (fallback) succeeded for {tconst}. Queued for {primary_node}.")
+                
+                return {
+                    'success': True,
+                    'primary_node': central_node,
+                    'replicated_to': None,
+                    'pending_replication': primary_node,
+                    'transaction_id': transaction_id,
+                    'results': results,
+                    'message': f'Insert committed to {central_node} (fallback). Queued for {primary_node}.'
+                }
+            else:
+                # Both nodes failed
+                logger.error(f"✗ BOTH NODES FAILED for INSERT {tconst}")
+                return {
+                    'success': False,
+                    'error': 'All target nodes unavailable',
+                    'results': results,
+                    'message': f'Insert failed: both {primary_node} and {central_node} unavailable'
+                }
     
     def update_title(self, tconst, data, isolation_level='READ COMMITTED'):
-        """Update title with replication"""
+        """Update title with bidirectional replication support"""
         title = self.db.get_title_by_id(tconst)
         
         if 'error' in title:
@@ -142,72 +165,99 @@ class ReplicationManager:
         
         results = {}
         
-        # Update primary fragment
+        # Try primary fragment first
         result_primary = self.db.execute_query(primary_node, query, tuple(params), isolation_level)
         results[primary_node] = result_primary
         
-        if not result_primary['success']:
-            logger.error(f"✗ PRIMARY UPDATE FAILED on {primary_node} for {tconst}")
-            return {
-                'success': False,
-                'error': result_primary.get('error'),
-                'message': f'Update failed at primary node {primary_node}',
-                'results': results
-            }
-        
-        logger.info(f"✓ UPDATE to PRIMARY {primary_node} succeeded for {tconst}")
-        
-        # Replicate to central
-        result_central = self.db.execute_query(central_node, query, tuple(params), isolation_level)
-        results[central_node] = result_central
-        
-        if result_central['success']:
-            self.transaction_logger.log_replication(
-                source_node=primary_node,
-                target_node=central_node,
-                operation_type='UPDATE',
-                record_id=tconst,
-                query=query,
-                params=tuple(params),
-                status='SUCCESS'
-            )
-            logger.info(f"✓ UPDATE replicated to CENTRAL {central_node} for {tconst}")
+        if result_primary['success']:
+            # Fragment succeeded - replicate to central
+            logger.info(f"✓ UPDATE to PRIMARY {primary_node} succeeded for {tconst}")
             
-            return {
-                'success': True,
-                'primary_node': primary_node,
-                'replicated_to_central': True,
-                'results': results,
-                'message': f'Update committed and replicated'
-            }
+            result_central = self.db.execute_query(central_node, query, tuple(params), isolation_level)
+            results[central_node] = result_central
+            
+            if result_central['success']:
+                self.transaction_logger.log_replication(
+                    source_node=primary_node,
+                    target_node=central_node,
+                    operation_type='UPDATE',
+                    record_id=tconst,
+                    query=query,
+                    params=tuple(params),
+                    status='SUCCESS'
+                )
+                logger.info(f"✓ UPDATE replicated to CENTRAL {central_node} for {tconst}")
+                
+                return {
+                    'success': True,
+                    'primary_node': primary_node,
+                    'replicated_to': central_node,
+                    'results': results,
+                    'message': f'Update committed and replicated'
+                }
+            else:
+                transaction_id = self.transaction_logger.log_replication(
+                    source_node=primary_node,
+                    target_node=central_node,
+                    operation_type='UPDATE',
+                    record_id=tconst,
+                    query=query,
+                    params=tuple(params),
+                    status='PENDING',
+                    error_msg=result_central.get('error')
+                )
+                
+                logger.warning(f"⚠ UPDATE REPLICATION FAILED for {tconst}. Queued.")
+                
+                return {
+                    'success': True,
+                    'primary_node': primary_node,
+                    'replicated_to': None,
+                    'pending_replication': central_node,
+                    'transaction_id': transaction_id,
+                    'results': results,
+                    'message': f'Update committed to {primary_node}, replication queued'
+                }
         else:
-            transaction_id = self.transaction_logger.log_replication(
-                source_node=primary_node,
-                target_node=central_node,
-                operation_type='UPDATE',
-                record_id=tconst,
-                query=query,
-                params=tuple(params),
-                status='PENDING',
-                error_msg=result_central.get('error')
-            )
+            # Fragment down - try central as fallback
+            logger.warning(f"⚠ PRIMARY {primary_node} unavailable, using central as fallback for {tconst}")
             
-            logger.warning(
-                f"⚠ UPDATE REPLICATION FAILED for {tconst}. "
-                f"Transaction {transaction_id} queued for retry."
-            )
+            result_central = self.db.execute_query(central_node, query, tuple(params), isolation_level)
+            results[central_node] = result_central
             
-            return {
-                'success': True,
-                'primary_node': primary_node,
-                'replicated_to_central': False,
-                'transaction_id': transaction_id,
-                'results': results,
-                'message': f'Update committed to {primary_node}, replication queued'
-            }
+            if result_central['success']:
+                transaction_id = self.transaction_logger.log_replication(
+                    source_node=central_node,
+                    target_node=primary_node,
+                    operation_type='UPDATE',
+                    record_id=tconst,
+                    query=query,
+                    params=tuple(params),
+                    status='PENDING',
+                    error_msg=f'{primary_node} was unavailable'
+                )
+                
+                logger.info(f"✓ UPDATE to CENTRAL (fallback) succeeded for {tconst}. Queued for {primary_node}.")
+                
+                return {
+                    'success': True,
+                    'primary_node': central_node,
+                    'replicated_to': None,
+                    'pending_replication': primary_node,
+                    'transaction_id': transaction_id,
+                    'results': results,
+                    'message': f'Update committed to {central_node} (fallback). Queued for {primary_node}.'
+                }
+            else:
+                logger.error(f"✗ BOTH NODES FAILED for UPDATE {tconst}")
+                return {
+                    'success': False,
+                    'error': 'All target nodes unavailable',
+                    'results': results
+                }
     
     def delete_title(self, tconst):
-        """Delete title with replication"""
+        """Delete title with bidirectional replication support"""
         title = self.db.get_title_by_id(tconst)
         
         if 'error' in title:
@@ -222,71 +272,97 @@ class ReplicationManager:
         
         results = {}
         
-        # Delete from primary
+        # Try primary fragment first
         result_primary = self.db.execute_query(primary_node, query, params)
         results[primary_node] = result_primary
         
-        if not result_primary['success']:
-            logger.error(f"✗ PRIMARY DELETE FAILED on {primary_node} for {tconst}")
-            return {
-                'success': False,
-                'error': result_primary.get('error'),
-                'message': f'Delete failed at primary node {primary_node}',
-                'results': results
-            }
-        
-        logger.info(f"✓ DELETE from PRIMARY {primary_node} succeeded for {tconst}")
-        
-        # Replicate deletion to central
-        result_central = self.db.execute_query(central_node, query, params)
-        results[central_node] = result_central
-        
-        if result_central['success']:
-            self.transaction_logger.log_replication(
-                source_node=primary_node,
-                target_node=central_node,
-                operation_type='DELETE',
-                record_id=tconst,
-                query=query,
-                params=params,
-                status='SUCCESS'
-            )
-            logger.info(f"✓ DELETE replicated to CENTRAL {central_node} for {tconst}")
+        if result_primary['success']:
+            logger.info(f"✓ DELETE from PRIMARY {primary_node} succeeded for {tconst}")
             
-            return {
-                'success': True,
-                'primary_node': primary_node,
-                'replicated_to_central': True,
-                'results': results,
-                'message': f'Delete committed and replicated'
-            }
+            result_central = self.db.execute_query(central_node, query, params)
+            results[central_node] = result_central
+            
+            if result_central['success']:
+                self.transaction_logger.log_replication(
+                    source_node=primary_node,
+                    target_node=central_node,
+                    operation_type='DELETE',
+                    record_id=tconst,
+                    query=query,
+                    params=params,
+                    status='SUCCESS'
+                )
+                logger.info(f"✓ DELETE replicated to CENTRAL {central_node} for {tconst}")
+                
+                return {
+                    'success': True,
+                    'primary_node': primary_node,
+                    'replicated_to': central_node,
+                    'results': results,
+                    'message': f'Delete committed and replicated'
+                }
+            else:
+                transaction_id = self.transaction_logger.log_replication(
+                    source_node=primary_node,
+                    target_node=central_node,
+                    operation_type='DELETE',
+                    record_id=tconst,
+                    query=query,
+                    params=params,
+                    status='PENDING',
+                    error_msg=result_central.get('error')
+                )
+                
+                logger.warning(f"⚠ DELETE REPLICATION FAILED for {tconst}. Queued.")
+                
+                return {
+                    'success': True,
+                    'primary_node': primary_node,
+                    'replicated_to': None,
+                    'pending_replication': central_node,
+                    'transaction_id': transaction_id,
+                    'results': results,
+                    'message': f'Delete committed to {primary_node}, replication queued'
+                }
         else:
-            transaction_id = self.transaction_logger.log_replication(
-                source_node=primary_node,
-                target_node=central_node,
-                operation_type='DELETE',
-                record_id=tconst,
-                query=query,
-                params=params,
-                status='PENDING',
-                error_msg=result_central.get('error')
-            )
+            # Fragment down - try central as fallback
+            logger.warning(f"⚠ PRIMARY {primary_node} unavailable, using central as fallback for {tconst}")
             
-            logger.warning(
-                f"⚠ DELETE REPLICATION FAILED for {tconst}. "
-                f"Transaction {transaction_id} queued for retry."
-            )
+            result_central = self.db.execute_query(central_node, query, params)
+            results[central_node] = result_central
             
-            return {
-                'success': True,
-                'primary_node': primary_node,
-                'replicated_to_central': False,
-                'transaction_id': transaction_id,
-                'results': results,
-                'message': f'Delete committed to {primary_node}, replication queued'
-            }
+            if result_central['success']:
+                transaction_id = self.transaction_logger.log_replication(
+                    source_node=central_node,
+                    target_node=primary_node,
+                    operation_type='DELETE',
+                    record_id=tconst,
+                    query=query,
+                    params=params,
+                    status='PENDING',
+                    error_msg=f'{primary_node} was unavailable'
+                )
+                
+                logger.info(f"✓ DELETE from CENTRAL (fallback) succeeded for {tconst}. Queued for {primary_node}.")
+                
+                return {
+                    'success': True,
+                    'primary_node': central_node,
+                    'replicated_to': None,
+                    'pending_replication': primary_node,
+                    'transaction_id': transaction_id,
+                    'results': results,
+                    'message': f'Delete committed to {central_node} (fallback). Queued for {primary_node}.'
+                }
+            else:
+                logger.error(f"✗ BOTH NODES FAILED for DELETE {tconst}")
+                return {
+                    'success': False,
+                    'error': 'All target nodes unavailable',
+                    'results': results
+                }
     
-    # === Delegation methods for recovery and concurrency testing ===
+    # === Delegation methods ===
     def recover_node(self, node_name):
         return self.recovery_handler.recover_node(node_name)
     
@@ -298,6 +374,9 @@ class ReplicationManager:
     
     def test_concurrent_writes(self, updates, isolation_level='READ COMMITTED'):
         return self.concurrency_tester.test_concurrent_writes(updates, isolation_level)
+    
+    def test_read_write_conflict(self, tconst, new_data, isolation_level='READ COMMITTED'):
+        return self.concurrency_tester.test_read_write_conflict(tconst, new_data, isolation_level)
     
     def simulate_failure(self, scenario):
         return self.concurrency_tester.simulate_failure(scenario)

@@ -3,137 +3,164 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Distributed Database Testing</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>Frontend Development Guide - MCO2</title>
 </head>
 <body>
-    <h1>Distributed Database Testing Interface</h1>
-    
-    <div class="section">
-        <h2>Node Health Status</h2>
-        <table id="healthTable">
-            <thead>
-                <tr>
-                    <th>Node</th>
-                    <th>Status</th>
-                    <th>Record Count</th>
-                    <th>Error</th>
-                </tr>
-            </thead>
-            <tbody id="healthBody">
-                <tr><td colspan="4">Loading...</td></tr>
-            </tbody>
-        </table>
-        <button onclick="checkHealth()">Refresh Health Status</button>
-    </div>
-    
-    <div class="section">
-        <h2>Step 3: Concurrency Control Tests</h2>
-        
-        <h3>Test Case 1: Concurrent Reads</h3>
-        <label>Isolation Level:</label>
-        <select id="case1Isolation">
-            <option value="READ UNCOMMITTED">READ UNCOMMITTED</option>
-            <option value="READ COMMITTED" selected>READ COMMITTED</option>
-            <option value="REPEATABLE READ">REPEATABLE READ</option>
-            <option value="SERIALIZABLE">SERIALIZABLE</option>
-        </select>
-        <label>Title ID:</label>
-        <input type="text" id="case1Tconst" value="tt0000001">
-        <button onclick="runCase1()">Run Test Case 1</button>
-        
-        <hr>
-        
-        <h3>Test Case 2: Read-Write Concurrent</h3>
-        <label>Isolation Level:</label>
-        <select id="case2Isolation">
-            <option value="READ UNCOMMITTED">READ UNCOMMITTED</option>
-            <option value="READ COMMITTED" selected>READ COMMITTED</option>
-            <option value="REPEATABLE READ">REPEATABLE READ</option>
-            <option value="SERIALIZABLE">SERIALIZABLE</option>
-        </select>
-        <label>Title ID:</label>
-        <input type="text" id="case2Tconst" value="tt0000001">
-        <label>New Runtime:</label>
-        <input type="number" id="case2Runtime" value="120">
-        <button onclick="runCase2()">Run Test Case 2</button>
-        
-        <hr>
-        
-        <h3>Test Case 3: Concurrent Writes</h3>
-        <label>Isolation Level:</label>
-        <select id="case3Isolation">
-            <option value="READ UNCOMMITTED">READ UNCOMMITTED</option>
-            <option value="READ COMMITTED">READ COMMITTED</option>
-            <option value="REPEATABLE READ">REPEATABLE READ</option>
-            <option value="SERIALIZABLE" selected>SERIALIZABLE</option>
-        </select>
-        <label>Title ID:</label>
-        <input type="text" id="case3Tconst" value="tt0000002">
-        <button onclick="runCase3()">Run Test Case 3</button>
-        
-        <hr>
-        
-        <h3>Compare All Isolation Levels</h3>
-        <label>Title ID:</label>
-        <input type="text" id="isolationTconst" value="tt0000001">
-        <label>Test Type:</label>
-        <select id="isolationType">
-            <option value="read">Read Operations</option>
-            <option value="write">Write Operations</option>
-        </select>
-        <button onclick="runIsolationComparison()">Compare Isolation Levels</button>
-    </div>
-    
-    <div class="section">
-        <h2>Step 4: Failure Recovery Tests</h2>
-        
-        <h3>Case 1: Fragment to Central Replication Failure</h3>
-        <p>Simulates fragment node write success but central node replication failure</p>
-        <button onclick="runFailureCase1()">Run Failure Case 1</button>
-        
-        <h3>Case 2: Central Node Recovery</h3>
-        <p>Processes missed transactions after central node comes back online</p>
-        <button onclick="runFailureCase2()">Run Failure Case 2</button>
-        
-        <h3>Case 3: Central to Fragment Replication Failure</h3>
-        <p>Simulates central node write success but fragment node replication failure</p>
-        <button onclick="runFailureCase3()">Run Failure Case 3</button>
-        
-        <h3>Case 4: Fragment Node Recovery</h3>
-        <label>Node to Recover:</label>
-        <select id="case4Node">
-            <option value="node2">node2 (Movies)</option>
-            <option value="node3">node3 (Non-Movies)</option>
-        </select>
-        <button onclick="runFailureCase4()">Run Failure Case 4</button>
-        
-        <hr>
-        
-        <h3>Recovery Status</h3>
-        <button onclick="checkRecoveryStatus()">Check Pending Replications</button>
-    </div>
-    
-    <div class="section">
-        <h2>Additional Operations</h2>
-        
-        <h3>View Transaction Logs</h3>
-        <label>Limit:</label>
-        <input type="number" id="logLimit" value="50">
-        <button onclick="viewLogs()">View Logs</button>
-        
-        <h3>Manual CRUD Operations</h3>
-        <button onclick="showTitles()">List Titles</button>
-        <button onclick="clearResults()">Clear Results</button>
-    </div>
-    
-    <div class="section">
-        <h2>Test Results</h2>
-        <div id="results">
-            <p>No tests run yet. Use the buttons above to start testing.</p>
-        </div>
-    </div>
+    <h1>MCO2 Frontend Development Guide</h1>
+    <p><strong>Backend API:</strong> <code>http://localhost:5000</code></p>
+    <p><strong>Reference:</strong> See <code>src/backend/app.py</code> for all endpoints</p>
 
-    <script src="script.js"></script>
+    <hr>
+
+    <h2>API Endpoints</h2>
+
+    <h3>Health & Status</h3>
+    <ul>
+        <li><code>GET /health</code> - Node health status (online/offline, record counts)</li>
+        <li><code>GET /recovery/status</code> - Pending replication count</li>
+        <li><code>GET /logs?limit=50</code> - Transaction logs</li>
+    </ul>
+
+    <h3>CRUD Operations</h3>
+    <ul>
+        <li><code>GET /titles?page=1&limit=20&type=movie</code> - List titles with pagination</li>
+        <li><code>GET /titles/search?q=matrix&year_from=1990&type=movie&genre=Action</code> - Search with filters</li>
+        <li><code>GET /title/{tconst}</code> - Get single title</li>
+        <li><code>POST /title</code> - Create title (body: {tconst, title_type, primary_title, start_year, runtime_minutes, genres})</li>
+        <li><code>PUT /title/{tconst}?isolation=READ COMMITTED</code> - Update title</li>
+        <li><code>DELETE /title/{tconst}</code> - Delete title</li>
+    </ul>
+
+    <h3>Concurrency Tests (Step 3)</h3>
+    <ul>
+        <li><code>POST /test/concurrent-read</code> - Case 1: Concurrent reads
+            <br>Body: <code>{"tconst": "tt0000001", "isolation_level": "READ COMMITTED"}</code>
+        </li>
+        <li><code>POST /test/read-write-conflict</code> - Case 2: Read while writing
+            <br>Body: <code>{"tconst": "tt0000001", "new_data": {"runtime_minutes": 150}, "isolation_level": "READ COMMITTED"}</code>
+        </li>
+        <li><code>POST /test/concurrent-write</code> - Case 3: Concurrent writes
+            <br>Body: <code>{"updates": [{"tconst": "tt0000001", "data": {"runtime_minutes": 100}}], "isolation_level": "SERIALIZABLE"}</code>
+        </li>
+        <li><code>POST /test/isolation-levels</code> - Compare all isolation levels
+            <br>Body: <code>{"tconst": "tt0000001", "operation": "read|write|read_write"}</code>
+        </li>
+    </ul>
+
+    <h3>Recovery Tests (Step 4)</h3>
+    <ul>
+        <li><code>POST /test/failure/fragment-to-central</code> - Case 1: Get instructions for simulating central failure</li>
+        <li><code>POST /test/failure/central-recovery</code> - Case 2: Trigger central node recovery</li>
+        <li><code>POST /test/failure/central-to-fragment</code> - Case 3: Get instructions for simulating fragment failure</li>
+        <li><code>POST /test/failure/fragment-recovery</code> - Case 4: Trigger fragment recovery
+            <br>Body: <code>{"node": "node2"}</code> or <code>{"node": "node3"}</code>
+        </li>
+    </ul>
+
+    <hr>
+
+    <h2>Frontend Checklist</h2>
+
+    <h3>Required Pages</h3>
+    <ul>
+        <li>☐ <strong>Dashboard</strong> - Node health display, pending replications count</li>
+        <li>☐ <strong>Titles Browser</strong> - List, search, pagination</li>
+        <li>☐ <strong>Title Form</strong> - Create/Edit title</li>
+        <li>☐ <strong>Concurrency Tests</strong> - Run test cases 1-3, select isolation level, display results</li>
+        <li>☐ <strong>Recovery Tests</strong> - Run test cases 1-4, display instructions and results</li>
+        <li>☐ <strong>Transaction Logs</strong> - View replication history</li>
+    </ul>
+
+    <h3>Required Features</h3>
+    <ul>
+        <li>☐ CRUD: Create, Read, Update, Delete titles</li>
+        <li>☐ Search with filters (title, year range, type, genre)</li>
+        <li>☐ Pagination for titles list</li>
+        <li>☐ Node health indicators (green/red for online/offline)</li>
+        <li>☐ Isolation level dropdown (READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, SERIALIZABLE)</li>
+        <li>☐ Display which node served each request (check "source" field in responses)</li>
+        <li>☐ Display test results in readable format</li>
+    </ul>
+
+    <h3>For Demo/Presentation</h3>
+    <ul>
+        <li>☐ Show CRUD working</li>
+        <li>☐ Show data appears on multiple nodes after insert</li>
+        <li>☐ Show concurrency test results with different isolation levels</li>
+        <li>☐ Show recovery: stop node → do operation → show pending → restart → recover → show success</li>
+    </ul>
+
+    <hr>
+
+    <h2>Isolation Levels (for dropdown)</h2>
+    <ul>
+        <li><strong>READ UNCOMMITTED</strong> - Can see uncommitted data (dirty reads)</li>
+        <li><strong>READ COMMITTED</strong> - Only sees committed data (recommended default)</li>
+        <li><strong>REPEATABLE READ</strong> - Same read = same result within transaction</li>
+        <li><strong>SERIALIZABLE</strong> - Full isolation, slowest</li>
+    </ul>
+
+    <hr>
+
+    <h2>Sample Response Formats</h2>
+
+    <h3>GET /health</h3>
+    <pre>{
+  "node1": {"status": "online", "healthy": true, "record_count": 10000},
+  "node2": {"status": "online", "healthy": true, "record_count": 5000},
+  "node3": {"status": "offline", "healthy": false}
+}</pre>
+
+    <h3>GET /titles</h3>
+    <pre>{
+  "data": [{"tconst": "tt0000001", "title_type": "movie", "primary_title": "...", ...}],
+  "total": 10000,
+  "page": 1,
+  "limit": 20,
+  "source": "node1"
+}</pre>
+
+    <h3>POST /title (Create)</h3>
+    <pre>// Request body:
+{
+  "tconst": "tt9999999",
+  "title_type": "movie",
+  "primary_title": "Test Movie",
+  "start_year": 2024,
+  "runtime_minutes": 120,
+  "genres": "Action,Comedy"
+}
+
+// Response:
+{
+  "success": true,
+  "primary_node": "node2",
+  "replicated_to": "node1",
+  "message": "Insert committed to node2 and replicated to node1"
+}</pre>
+
+    <h3>POST /test/concurrent-read</h3>
+    <pre>{
+  "test": "concurrent_read",
+  "isolation_level": "READ COMMITTED",
+  "tconst": "tt0000001",
+  "results": {
+    "node1": {"success": true, "data": {...}, "read_time": 0.05},
+    "node2": {"success": true, "data": {...}, "read_time": 0.04}
+  },
+  "consistent": true
+}</pre>
+
+    <h3>GET /recovery/status</h3>
+    <pre>{
+  "total_pending": 3,
+  "by_node": {
+    "node1": {"status": "online", "pending_count": 0},
+    "node2": {"status": "online", "pending_count": 2, "pending_by_target": {"node1": 2}},
+    "node3": {"status": "offline", "pending_count": 1}
+  },
+  "automatic_retry_active": true
+}</pre>
+
 </body>
 </html>

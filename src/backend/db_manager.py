@@ -77,6 +77,21 @@ class DatabaseManager:
         
         return None
     
+    def check_node(self, node_name):
+        """Check if a specific node is online"""
+        conn = self.get_connection(node_name)
+        if conn:
+            try:
+                cursor = conn.cursor()
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+                return True
+            except:
+                return False
+            finally:
+                conn.close()
+        return False
+    
     def check_all_nodes(self):
         """Check health of all nodes"""
         status = {}
@@ -271,6 +286,150 @@ class DatabaseManager:
             'source': 'node2+node3 (combined)'
         }
     
+    def search_titles(self, search_term=None, year_from=None, year_to=None, 
+                      title_type=None, genre=None, page=1, limit=20):
+        """Search titles with filters"""
+        offset = (page - 1) * limit
+        
+        # Build WHERE clause
+        conditions = []
+        params = []
+        
+        if search_term:
+            conditions.append("primary_title LIKE %s")
+            params.append(f"%{search_term}%")
+        
+        if year_from:
+            conditions.append("start_year >= %s")
+            params.append(year_from)
+        
+        if year_to:
+            conditions.append("start_year <= %s")
+            params.append(year_to)
+        
+        if title_type:
+            conditions.append("title_type = %s")
+            params.append(title_type)
+        
+        if genre:
+            conditions.append("genres LIKE %s")
+            params.append(f"%{genre}%")
+        
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+        
+        # Try node1 first
+        conn = self.get_connection('node1')
+        
+        if conn:
+            try:
+                cursor = conn.cursor(dictionary=True)
+                
+                query = f"""
+                    SELECT * FROM titles 
+                    WHERE {where_clause}
+                    ORDER BY start_year DESC 
+                    LIMIT %s OFFSET %s
+                """
+                cursor.execute(query, tuple(params) + (limit, offset))
+                titles = cursor.fetchall()
+                
+                count_query = f"SELECT COUNT(*) as total FROM titles WHERE {where_clause}"
+                cursor.execute(count_query, tuple(params))
+                total = cursor.fetchone()['total']
+                
+                return {
+                    'data': titles,
+                    'total': total,
+                    'page': page,
+                    'limit': limit,
+                    'source': 'node1',
+                    'filters': {
+                        'search_term': search_term,
+                        'year_from': year_from,
+                        'year_to': year_to,
+                        'title_type': title_type,
+                        'genre': genre
+                    }
+                }
+            except Error as e:
+                logger.warning(f"Error searching titles from node1: {e}")
+            finally:
+                conn.close()
+        
+        # Fallback to appropriate fragment based on title_type filter
+        if title_type == 'movie':
+            return self._search_from_node('node2', where_clause, params, page, limit)
+        elif title_type:
+            return self._search_from_node('node3', where_clause, params, page, limit)
+        else:
+            return self._search_combined_fragments(where_clause, params, page, limit)
+    
+    def _search_from_node(self, node_name, where_clause, params, page, limit):
+        """Helper: Search from a specific node"""
+        offset = (page - 1) * limit
+        conn = self.get_connection(node_name)
+        
+        if not conn:
+            return {'error': f'{node_name} unavailable', 'data': [], 'total': 0}
+        
+        try:
+            cursor = conn.cursor(dictionary=True)
+            
+            query = f"""
+                SELECT * FROM titles 
+                WHERE {where_clause}
+                ORDER BY start_year DESC 
+                LIMIT %s OFFSET %s
+            """
+            cursor.execute(query, tuple(params) + (limit, offset))
+            titles = cursor.fetchall()
+            
+            count_query = f"SELECT COUNT(*) as total FROM titles WHERE {where_clause}"
+            cursor.execute(count_query, tuple(params))
+            total = cursor.fetchone()['total']
+            
+            return {
+                'data': titles,
+                'total': total,
+                'page': page,
+                'limit': limit,
+                'source': node_name
+            }
+        except Error as e:
+            return {'error': str(e), 'data': [], 'total': 0}
+        finally:
+            conn.close()
+    
+    def _search_combined_fragments(self, where_clause, params, page, limit):
+        """Helper: Search and combine from both fragments"""
+        offset = (page - 1) * limit
+        all_titles = []
+        
+        for node_name in ['node2', 'node3']:
+            conn = self.get_connection(node_name)
+            if conn:
+                try:
+                    cursor = conn.cursor(dictionary=True)
+                    query = f"SELECT * FROM titles WHERE {where_clause} ORDER BY start_year DESC"
+                    cursor.execute(query, tuple(params))
+                    all_titles.extend(cursor.fetchall())
+                except Error as e:
+                    logger.warning(f"Error searching from {node_name}: {e}")
+                finally:
+                    conn.close()
+        
+        all_titles.sort(key=lambda x: x.get('start_year') or 0, reverse=True)
+        total = len(all_titles)
+        paginated = all_titles[offset:offset + limit]
+        
+        return {
+            'data': paginated,
+            'total': total,
+            'page': page,
+            'limit': limit,
+            'source': 'node2+node3 (combined)'
+        }
+    
     def get_title_by_id(self, tconst):
         """Get single title by ID with automatic fallback"""
         conn = self.get_connection('node1')
@@ -315,14 +474,13 @@ class DatabaseManager:
         
         try:
             if not autocommit:
-                conn.start_transaction()  # Explicit transaction
+                conn.start_transaction()
             
             cursor = conn.cursor()
             cursor.execute(query, params or ())
             
             if autocommit:
                 conn.commit()
-            # Else: caller must commit/rollback
             
             return {'success': True, 'rows_affected': cursor.rowcount, 'connection': conn if not autocommit else None}
         except Error as e:
@@ -343,9 +501,10 @@ class DatabaseManager:
         
         try:
             cursor = conn.cursor(dictionary=True)
+            # FIXED: changed 'timestamp' to 'created_at'
             cursor.execute("""
                 SELECT * FROM transaction_log 
-                ORDER BY timestamp DESC 
+                ORDER BY created_at DESC 
                 LIMIT %s
             """, (limit,))
             logs = cursor.fetchall()

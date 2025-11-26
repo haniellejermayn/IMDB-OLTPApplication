@@ -4,8 +4,6 @@ from db_manager import DatabaseManager
 from replication.replication_manager import ReplicationManager
 import logging
 
-# TODO: add search endpoint with filters
-
 app = Flask(__name__)
 CORS(app)
 
@@ -31,6 +29,40 @@ def get_titles():
     title_type = request.args.get('type', None)
     
     result = db_manager.get_titles(page, limit, title_type)
+    return jsonify(result)
+
+@app.route('/titles/search', methods=['GET'])
+def search_titles():
+    """
+    Search titles with filters
+    Query params:
+    - q: search term (searches in primary_title)
+    - year_from: minimum year
+    - year_to: maximum year
+    - type: title_type (movie, short, tvSeries, etc.)
+    - genre: genre filter
+    - page: page number (default 1)
+    - limit: results per page (default 20)
+    
+    Example: GET /titles/search?q=matrix&year_from=1990&type=movie
+    """
+    search_term = request.args.get('q', None)
+    year_from = request.args.get('year_from', None, type=int)
+    year_to = request.args.get('year_to', None, type=int)
+    title_type = request.args.get('type', None)
+    genre = request.args.get('genre', None)
+    page = int(request.args.get('page', 1))
+    limit = int(request.args.get('limit', 20))
+    
+    result = db_manager.search_titles(
+        search_term=search_term,
+        year_from=year_from,
+        year_to=year_to,
+        title_type=title_type,
+        genre=genre,
+        page=page,
+        limit=limit
+    )
     return jsonify(result)
 
 @app.route('/title/<tconst>', methods=['GET'])
@@ -76,10 +108,29 @@ def test_concurrent_read():
     result = replication_manager.test_concurrent_reads(tconst, isolation_level)
     return jsonify(result)
 
+@app.route('/test/read-write-conflict', methods=['POST'])
+def test_read_write_conflict():
+    """
+    Test Case 2: One transaction writing while others read
+    Example: POST /test/read-write-conflict
+    Body: {
+        "tconst": "tt0133093",
+        "new_data": {"runtime_minutes": 150},
+        "isolation_level": "READ COMMITTED"
+    }
+    """
+    data = request.json
+    tconst = data.get('tconst')
+    new_data = data.get('new_data', {})
+    isolation_level = data.get('isolation_level', 'READ COMMITTED')
+    
+    result = replication_manager.test_read_write_conflict(tconst, new_data, isolation_level)
+    return jsonify(result)
+
 @app.route('/test/concurrent-write', methods=['POST'])
 def test_concurrent_write():
     """
-    Test Case 2 & 3: Concurrent writes
+    Test Case 3: Concurrent writes
     Example: POST /test/concurrent-write
     Body: {
         "updates": [
@@ -102,7 +153,7 @@ def test_concurrent_write():
 def test_failure_case1():
     """
     Test Case #1: Fragment write succeeds, but central replication fails
-    Simulate by stopping node1 container, then inserting data
+    Instructions returned on how to simulate this
     """
     result = replication_manager.simulate_failure('fragment_to_central')
     return jsonify(result)
@@ -111,7 +162,6 @@ def test_failure_case1():
 def test_failure_case2():
     """
     Test Case #2: Central node recovers and processes missed transactions
-    Example: POST /test/failure/central-recovery
     """
     result = replication_manager.recover_node('node1')
     return jsonify(result)
@@ -119,8 +169,8 @@ def test_failure_case2():
 @app.route('/test/failure/central-to-fragment', methods=['POST'])
 def test_failure_case3():
     """
-    Test Case #3: Central write succeeds, but fragment replication fails
-    Simulate by stopping node2/node3 container, then updating data
+    Test Case #3: Central write succeeds (fallback), but fragment replication fails
+    Instructions returned on how to simulate this
     """
     result = replication_manager.simulate_failure('central_to_fragment')
     return jsonify(result)
@@ -129,7 +179,6 @@ def test_failure_case3():
 def test_failure_case4():
     """
     Test Case #4: Fragment node recovers and processes missed transactions
-    Example: POST /test/failure/fragment-recovery
     Body: {"node": "node2"} or {"node": "node3"}
     """
     node = request.json.get('node', 'node2')
@@ -173,11 +222,16 @@ def get_transaction_logs():
 def test_isolation_levels():
     """
     Test all isolation levels with concurrent operations
-    Body: {"tconst": "tt0001", "operation": "read" or "write"}
+    Body: {
+        "tconst": "tt0001",
+        "operation": "read" or "write" or "read_write",
+        "new_data": {"runtime_minutes": 999}  // for write/read_write operations
+    }
     """
     data = request.json
     tconst = data.get('tconst')
     operation = data.get('operation', 'read')
+    new_data = data.get('new_data', {'runtime_minutes': 999})
     
     isolation_levels = [
         'READ UNCOMMITTED',
@@ -191,6 +245,8 @@ def test_isolation_levels():
     for level in isolation_levels:
         if operation == 'read':
             result = replication_manager.test_concurrent_reads(tconst, level)
+        elif operation == 'read_write':
+            result = replication_manager.test_read_write_conflict(tconst, new_data, level)
         else:
             # For write test, create sample updates
             updates = [
@@ -204,6 +260,7 @@ def test_isolation_levels():
     return jsonify({
         'test': 'isolation_levels_comparison',
         'operation': operation,
+        'tconst': tconst,
         'results': results
     })
 

@@ -11,9 +11,11 @@ class TransactionLogger:
     def log_replication(self, source_node, target_node, operation_type, 
                        record_id, query, params, status='PENDING', error_msg=None):
         """
+        Log a replication operation to the source node's transaction_log.
+        
         Args:
-            source_node: node where write happened (node2/node3)
-            target_node: node where replica should go (node1)
+            source_node: node where write happened (node1/node2/node3)
+            target_node: node where replica should go
             operation_type: INSERT/UPDATE/DELETE
             record_id: tconst value
             query: SQL query text
@@ -30,7 +32,7 @@ class TransactionLogger:
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         
-        # convert params tuple to JSON
+        # Convert params tuple to JSON
         params_json = json.dumps(list(params)) if params else None
         
         log_params = (
@@ -46,7 +48,7 @@ class TransactionLogger:
             error_msg
         )
         
-        # log to source node's transaction log
+        # Log to source node's transaction log
         result = self.db.execute_query(source_node, log_query, log_params)
         
         if not result['success']:
@@ -118,7 +120,6 @@ class TransactionLogger:
         finally:
             conn.close()
     
-    # avoid duplicate IDs by using UUIDs
     def _generate_transaction_id(self):
         """Generate unique transaction ID"""
         import uuid

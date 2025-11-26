@@ -10,7 +10,7 @@ class RecoveryHandler:
     def __init__(self, db_manager, transaction_logger):
         self.db = db_manager
         self.transaction_logger = transaction_logger
-        self.retry_interval = 10  # rerty every 10 seconds
+        self.retry_interval = 10  # retry every 10 seconds
         self.is_running = False
         self.retry_thread = None
     
@@ -30,17 +30,17 @@ class RecoveryHandler:
         self.is_running = False
         if self.retry_thread:
             self.retry_thread.join(timeout=5)
-        logger.info("⏸ Automatic retry stopped")
+        logger.info("Automatic retry stopped")
     
     def _retry_loop(self):
         """Background loop that retries failed replications"""
         while self.is_running:
             try:
-                # Check each fragment node for pending replications
-                for source_node in ['node2', 'node3']:
+                # Check ALL nodes for pending replications (bidirectional)
+                # node1 = central, node2/node3 = fragments
+                for source_node in ['node1', 'node2', 'node3']:
                     self._process_pending_replications(source_node)
                 
-                # Sleep before next retry cycle
                 time.sleep(self.retry_interval)
                 
             except Exception as e:
@@ -54,7 +54,7 @@ class RecoveryHandler:
         if not pending:
             return
         
-        logger.info(f"🔄 Processing {len(pending)} pending replications from {source_node}")
+        logger.info(f"Processing {len(pending)} pending replications from {source_node}")
         
         for transaction in pending:
             self._retry_single_transaction(source_node, transaction)
@@ -69,7 +69,7 @@ class RecoveryHandler:
         
         # Parse JSON params back to tuple
         try:
-            params = tuple(json.loads(transaction['query_params']))
+            params = tuple(json.loads(transaction['query_params'])) if transaction['query_params'] else ()
         except:
             params = ()
         
@@ -78,6 +78,11 @@ class RecoveryHandler:
             f"{source_node} → {target_node} (attempt {transaction['retry_count'] + 1})"
         )
         
+        # Check if target node is online before attempting
+        if not self.db.check_node(target_node):
+            logger.warning(f"Target {target_node} still offline, skipping retry for {record_id}")
+            return
+        
         # Attempt replication
         result = self.db.execute_query(target_node, query, params)
         
@@ -85,20 +90,17 @@ class RecoveryHandler:
         self.transaction_logger.increment_retry_count(source_node, transaction_id)
         
         if result['success']:
-            # Success! Update status
             self.transaction_logger.update_log_status(
                 source_node, 
                 transaction_id, 
                 'SUCCESS'
             )
             logger.info(
-                f"REPLICATION SUCCESS: {operation_type} for {record_id} "
+                f"✓ REPLICATION SUCCESS: {operation_type} for {record_id} "
                 f"({source_node} → {target_node})"
             )
         else:
-            # Still failing
             if transaction['retry_count'] + 1 >= transaction['max_retries']:
-                # Max retries reached - mark as FAILED
                 self.transaction_logger.update_log_status(
                     source_node,
                     transaction_id,
@@ -106,11 +108,10 @@ class RecoveryHandler:
                     error_msg=f"Max retries reached. Last error: {result.get('error')}"
                 )
                 logger.error(
-                    f"REPLICATION FAILED PERMANENTLY: {operation_type} for {record_id} "
-                    f"after {transaction['max_retries']} attempts. Manual intervention required."
+                    f"✗ REPLICATION FAILED PERMANENTLY: {operation_type} for {record_id} "
+                    f"after {transaction['max_retries']} attempts"
                 )
             else:
-                # Will retry again in next cycle
                 logger.warning(
                     f"⚠ Retry {transaction['retry_count'] + 1} failed for {record_id}. "
                     f"Will retry again. Error: {result.get('error')}"
@@ -122,12 +123,23 @@ class RecoveryHandler:
         """
         logger.info(f"Manual recovery triggered for {node_name}")
         
+        # Check if target node is online
+        if not self.db.check_node(node_name):
+            return {
+                'node': node_name,
+                'recovered': 0,
+                'failed': 0,
+                'message': f'{node_name} is still offline. Cannot recover.'
+            }
+        
         recovered = 0
         failed = 0
         
-        # Check all source nodes for replications targeting this node
-        for source_node in ['node2', 'node3']:
-            # Get pending transactions targeting the recovered node
+        # Check ALL source nodes for replications targeting this node
+        for source_node in ['node1', 'node2', 'node3']:
+            if source_node == node_name:
+                continue  # Skip self
+            
             conn = self.db.get_connection(source_node)
             if not conn:
                 logger.warning(f"Cannot access {source_node} for recovery check")
@@ -185,12 +197,14 @@ class RecoveryHandler:
         summary = {}
         total_pending = 0
         
-        for source_node in ['node2', 'node3']:
+        # Check ALL nodes (bidirectional support)
+        for source_node in ['node1', 'node2', 'node3']:
             conn = self.db.get_connection(source_node)
             if not conn:
                 summary[source_node] = {
                     'status': 'offline',
-                    'pending_count': 0
+                    'pending_count': 0,
+                    'failed_count': 0
                 }
                 continue
             
@@ -209,14 +223,24 @@ class RecoveryHandler:
                 cursor.execute("""
                     SELECT COUNT(*) as count 
                     FROM transaction_log 
-                    WHERE status = 'FAILED' OR retry_count >= max_retries
+                    WHERE status = 'FAILED' OR (status = 'PENDING' AND retry_count >= max_retries)
                 """)
                 failed_count = cursor.fetchone()['count']
+                
+                # Get breakdown by target
+                cursor.execute("""
+                    SELECT target_node, COUNT(*) as count
+                    FROM transaction_log
+                    WHERE status = 'PENDING' AND retry_count < max_retries
+                    GROUP BY target_node
+                """)
+                pending_by_target = {row['target_node']: row['count'] for row in cursor.fetchall()}
                 
                 summary[source_node] = {
                     'status': 'online',
                     'pending_count': pending_count,
-                    'failed_count': failed_count
+                    'failed_count': failed_count,
+                    'pending_by_target': pending_by_target
                 }
                 
                 total_pending += pending_count
@@ -236,3 +260,8 @@ class RecoveryHandler:
             'retry_interval': self.retry_interval,
             'automatic_retry_active': self.is_running
         }
+    
+    def get_pending_count(self):
+        """Quick count of all pending replications"""
+        summary = self.get_pending_summary()
+        return summary.get('total_pending', 0)
