@@ -2,3 +2,7 @@
 data/*.tsv
 data/*.tsv.gz
 data/*.csv
+
+# Pycache files
+**/__pycache__/
+*.py[cod]
