@@ -2,18 +2,37 @@ import mysql.connector
 from mysql.connector import Error
 import logging
 import time
+import os
 
 logger = logging.getLogger(__name__)
 
 class DatabaseManager:
     def __init__(self):
+        # Node configuration from environment variables (with defaults for local Docker)
         self.nodes = {
-            'node1': {'host': 'node1-central', 'port': 3306, 'db': 'imdb_distributed'},
-            'node2': {'host': 'node2-movies', 'port': 3306, 'db': 'imdb_distributed'},
-            'node3': {'host': 'node3-nonmovies', 'port': 3306, 'db': 'imdb_distributed'}
+            'node1': {
+                'host': os.environ.get('NODE1_HOST', 'node1-central'),
+                'port': int(os.environ.get('NODE1_PORT', 3306)),
+                'db': 'imdb_distributed'
+            },
+            'node2': {
+                'host': os.environ.get('NODE2_HOST', 'node2-movies'),
+                'port': int(os.environ.get('NODE2_PORT', 3306)),
+                'db': 'imdb_distributed'
+            },
+            'node3': {
+                'host': os.environ.get('NODE3_HOST', 'node3-nonmovies'),
+                'port': int(os.environ.get('NODE3_PORT', 3306)),
+                'db': 'imdb_distributed'
+            }
         }
-        self.user = 'root'
-        self.password = 'password123'
+        self.user = os.environ.get('DB_USER', 'root')
+        self.password = os.environ.get('DB_PASSWORD', 'password123')
+        
+        logger.info(f"Database configuration:")
+        logger.info(f"  Node1: {self.nodes['node1']['host']}:{self.nodes['node1']['port']}")
+        logger.info(f"  Node2: {self.nodes['node2']['host']}:{self.nodes['node2']['port']}")
+        logger.info(f"  Node3: {self.nodes['node3']['host']}:{self.nodes['node3']['port']}")
         
         self._wait_for_nodes()
     
@@ -501,7 +520,6 @@ class DatabaseManager:
         
         try:
             cursor = conn.cursor(dictionary=True)
-            # FIXED: changed 'timestamp' to 'created_at'
             cursor.execute("""
                 SELECT * FROM transaction_log 
                 ORDER BY created_at DESC 
