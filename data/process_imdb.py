@@ -21,15 +21,15 @@ def process_imdb(generate_node1, generate_node2, generate_node3):
     
     if generate_node1:
         files_to_open['all'] = open(output_all, 'w', newline='', encoding='utf-8')
-        writers['all'] = csv.writer(files_to_open['all'], quoting=csv.QUOTE_NONE, escapechar='\\')
+        writers['all'] = csv.writer(files_to_open['all'], quoting=csv.QUOTE_MINIMAL, escapechar='\\')
         
     if generate_node2:
         files_to_open['movies'] = open(output_movies, 'w', newline='', encoding='utf-8')
-        writers['movies'] = csv.writer(files_to_open['movies'], quoting=csv.QUOTE_NONE, escapechar='\\')
+        writers['movies'] = csv.writer(files_to_open['movies'], quoting=csv.QUOTE_MINIMAL, escapechar='\\')
         
     if generate_node3:
         files_to_open['nonmovies'] = open(output_nonmovies, 'w', newline='', encoding='utf-8')
-        writers['nonmovies'] = csv.writer(files_to_open['nonmovies'], quoting=csv.QUOTE_NONE, escapechar='\\')
+        writers['nonmovies'] = csv.writer(files_to_open['nonmovies'], quoting=csv.QUOTE_MINIMAL, escapechar='\\')
     
     header = ['tconst', 'title_type', 'primary_title', 'start_year', 'runtime_minutes', 'genres']
     for writer in writers.values():
@@ -49,12 +49,25 @@ def process_imdb(generate_node1, generate_node2, generate_node3):
                 count < 40000):  # Stop at 40k rows
                 
                 # Clean data 
-                year = row['startYear']
-                runtime = row['runtimeMinutes']
-                genres = row['genres'].replace('\\N', 'Unknown').replace(',', ';')  
-                title = row['primaryTitle'].replace('"', '').replace(',', ' ')  
-                title_type = row['titleType']
-                tconst = row['tconst']
+                year = row['startYear'].strip()
+                runtime = row['runtimeMinutes'].strip()
+                genres = (row['genres']
+                         .replace('\\N', 'Unknown')
+                         .replace(',', ';')
+                         .replace('\r', '')
+                         .replace('\n', '')
+                         .replace('\x00', '')
+                         .strip())
+                
+                # Clean title: remove quotes, commas, line breaks, null bytes
+                title = (row['primaryTitle']
+                    .replace('\r', '')
+                    .replace('\n', ' ')
+                    .replace('\x00', '')
+                    .strip())
+                
+                title_type = row['titleType'].strip()
+                tconst = row['tconst'].strip()
                 
                 row_data = [tconst, title_type, title, year, runtime, genres]
                 

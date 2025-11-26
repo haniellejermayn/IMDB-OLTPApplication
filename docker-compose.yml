@@ -4,7 +4,7 @@ services:
     build: ./src/backend
     container_name: distributed-backend
     ports:
-      - "5000:5000"
+      - "80:80"
     depends_on:
       mysql-node1:
         condition: service_healthy

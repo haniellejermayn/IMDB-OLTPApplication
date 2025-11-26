@@ -16,6 +16,16 @@ replication_manager = ReplicationManager(db_manager)
 replication_manager.recovery_handler.start_automatic_retry()
 logger.info("Application started with automatic replication retry enabled")
 
+def clean_result(data):
+    """Clean data before sending to frontend"""
+    if isinstance(data, dict):
+        return {k: clean_result(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [clean_result(item) for item in data]
+    elif isinstance(data, str):
+        return data.replace('\r', '').replace('\n', '').replace('\x00', '').strip()
+    return data
+
 @app.route('/health', methods=['GET'])
 def health_check():
     """Check node health status"""
@@ -29,7 +39,7 @@ def get_titles():
     title_type = request.args.get('type', None)
     
     result = db_manager.get_titles(page, limit, title_type)
-    return jsonify(result)
+    return jsonify(clean_result(result))
 
 @app.route('/titles/search', methods=['GET'])
 def search_titles():
@@ -63,20 +73,20 @@ def search_titles():
         page=page,
         limit=limit
     )
-    return jsonify(result)
+    return jsonify(clean_result(result))
 
 @app.route('/title/<tconst>', methods=['GET'])
 def get_title(tconst):
     """Get single title by ID"""
     result = db_manager.get_title_by_id(tconst)
-    return jsonify(result)
+    return jsonify(clean_result(result))
 
 @app.route('/title', methods=['POST'])
 def create_title():
     """Create new title"""
     data = request.json
     result = replication_manager.insert_title(data)
-    return jsonify(result), 201 if result['success'] else 500
+    return jsonify(clean_result(result)), 201 if result['success'] else 500
 
 @app.route('/title/<tconst>', methods=['PUT'])
 def update_title(tconst):
@@ -84,13 +94,13 @@ def update_title(tconst):
     data = request.json
     isolation_level = request.args.get('isolation', 'READ COMMITTED')
     result = replication_manager.update_title(tconst, data, isolation_level)
-    return jsonify(result)
+    return jsonify(clean_result(result))
 
 @app.route('/title/<tconst>', methods=['DELETE'])
 def delete_title(tconst):
     """Delete title"""
     result = replication_manager.delete_title(tconst)
-    return jsonify(result)
+    return jsonify(clean_result(result))
 
 # ==================== CONCURRENCY TEST CASES ====================
 
@@ -106,7 +116,7 @@ def test_concurrent_read():
     isolation_level = data.get('isolation_level', 'READ COMMITTED')
     
     result = replication_manager.test_concurrent_reads(tconst, isolation_level)
-    return jsonify(result)
+    return jsonify(clean_result(result))
 
 @app.route('/test/read-write-conflict', methods=['POST'])
 def test_read_write_conflict():
@@ -125,7 +135,7 @@ def test_read_write_conflict():
     isolation_level = data.get('isolation_level', 'READ COMMITTED')
     
     result = replication_manager.test_read_write_conflict(tconst, new_data, isolation_level)
-    return jsonify(result)
+    return jsonify(clean_result(result))
 
 @app.route('/test/concurrent-write', methods=['POST'])
 def test_concurrent_write():
@@ -145,7 +155,7 @@ def test_concurrent_write():
     isolation_level = data.get('isolation_level', 'READ COMMITTED')
     
     result = replication_manager.test_concurrent_writes(updates, isolation_level)
-    return jsonify(result)
+    return jsonify(clean_result(result))
 
 # ==================== FAILURE RECOVERY TEST CASES ====================
 
@@ -156,7 +166,7 @@ def test_failure_case1():
     Instructions returned on how to simulate this
     """
     result = replication_manager.simulate_failure('fragment_to_central')
-    return jsonify(result)
+    return jsonify(clean_result(result))
 
 @app.route('/test/failure/central-recovery', methods=['POST'])
 def test_failure_case2():
@@ -164,7 +174,7 @@ def test_failure_case2():
     Test Case #2: Central node recovers and processes missed transactions
     """
     result = replication_manager.recover_node('node1')
-    return jsonify(result)
+    return jsonify(clean_result(result))
 
 @app.route('/test/failure/central-to-fragment', methods=['POST'])
 def test_failure_case3():
@@ -173,7 +183,7 @@ def test_failure_case3():
     Instructions returned on how to simulate this
     """
     result = replication_manager.simulate_failure('central_to_fragment')
-    return jsonify(result)
+    return jsonify(clean_result(result))
 
 @app.route('/test/failure/fragment-recovery', methods=['POST'])
 def test_failure_case4():
@@ -183,13 +193,13 @@ def test_failure_case4():
     """
     node = request.json.get('node', 'node2')
     result = replication_manager.recover_node(node)
-    return jsonify(result)
+    return jsonify(clean_result(result))
 
 @app.route('/recovery/status', methods=['GET'])
 def recovery_status():
     """Get pending replication count"""
     result = replication_manager.get_pending_replications()
-    return jsonify(result)
+    return jsonify(clean_result(result))
 
 @app.route('/recovery/auto-retry', methods=['POST'])
 def control_auto_retry():
@@ -214,7 +224,7 @@ def get_transaction_logs():
     """Get transaction logs"""
     limit = int(request.args.get('limit', 50))
     result = db_manager.get_transaction_logs(limit)
-    return jsonify(result)
+    return jsonify(clean_result(result))
 
 # ==================== ISOLATION LEVEL TESTING ====================
 
@@ -261,7 +271,7 @@ def test_isolation_levels():
         'test': 'isolation_levels_comparison',
         'operation': operation,
         'tconst': tconst,
-        'results': results
+        'results': clean_result(results)
     })
 
 if __name__ == '__main__':
