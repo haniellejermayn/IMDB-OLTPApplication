@@ -1,0 +1,93 @@
+h1 {
+     font-weight: bold;
+}
+
+body {
+    display: flex;
+    justify-content: center; 
+    align-items: center;    
+    min-height: 100vh; 
+    margin: 0;
+}
+
+/* Container spacing */
+#input-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* Form layout in column */
+#title-form {
+    display: flex;
+    flex-direction: column;
+
+    padding: 1rem;
+    border-radius: 0.5rem;
+    background-color: var(--color-secondary);
+}
+
+/* Labels on top of inputs */
+#title-form label {
+    font-weight: bold;
+    color: var(--color-main);
+    margin-bottom: 0.3rem;
+}
+
+/* Input styling */
+#title-form input {
+    padding: 0.5rem;
+    border: 1px solid var(--color-sub);
+    border-radius: 4px;
+    font-size: 1rem;
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 1rem;
+}
+
+/* Disabled TCONST for edit mode */
+#title-form input:disabled {
+    background-color: #ddd;
+    color: #666;
+}
+
+/* Row for start year and runtime */
+.row {
+    display: flex;
+    gap: 1rem;
+}
+
+/* Each input in the row takes equal space */
+.row input {
+    flex: 1;
+}
+
+/* Submit button aligned to right */
+#title-form button {
+    align-self: flex-end;
+    margin-top: 0.5rem;
+}
+
+/* Result messages */
+#result {
+    margin-top: 1rem;
+    font-weight: bold;
+    display: flex;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+}
+
+/* Optional: error and success message colors */
+#result.success {
+    color: var(--color-main);
+}
+
+#result.error {
+    color: #E83D3D; /* Red for errors */
+}
+
+#last-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+}

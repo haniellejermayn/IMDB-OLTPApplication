@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Create / Edit IMDb Title</title>
+        <link rel="stylesheet" href="../public/css/general.css" />
+        <link rel="stylesheet" href="../public/css/create-title.css" />
+    </head>
+    <body>
+        <div class="container">
+            <h1>CREATE TITLE</h1>
+
+            <div class="break"></div>
+
+            <div id="input-fields">
+                <form id="title-form">
+                    <label for="tconst">TCONST:</label>
+                    <input
+                        type="text"
+                        id="tconst"
+                        name="tconst"
+                        placeholder="This will be generated..."
+                        disabled
+                    />
+
+                    <label for="title_type">Title Type:</label>
+                    <input
+                        type="text"
+                        id="title_type"
+                        name="title_type"
+                        placeholder="movie, short, tvSeries..."
+                        required
+                    />
+
+                    <label for="primary_title">Primary Title:</label>
+                    <input
+                        type="text"
+                        id="primary_title"
+                        name="primary_title"
+                        placeholder="Inception"
+                        required
+                    />
+
+                    <div class="row">
+                        <div>
+                            <label for="start_year">Start Year:</label>
+                            <input
+                                type="number"
+                                id="start_year"
+                                name="start_year"
+                                placeholder="2010"
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label for="runtime_minutes"
+                                >Runtime Minutes:</label
+                            >
+                            <input
+                                type="number"
+                                id="runtime_minutes"
+                                name="runtime_minutes"
+                                placeholder="148"
+                                required
+                            />
+                        </div>
+                    </div>
+
+                    <label for="genres">Genres (comma-separated):</label>
+                    <input
+                        type="text"
+                        id="genres"
+                        name="genres"
+                        placeholder="Action,Adventure,Sci-Fi"
+                        required
+                    />
+
+                    <div id="last-row">
+                        <div id="result" style="margin-top: 1rem"></div>
+                        <button type="submit">Submit</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script src="../public/js/create-title-script.js"></script>
+    </body>
+</html>

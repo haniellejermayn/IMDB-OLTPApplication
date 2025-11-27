@@ -1,0 +1,158 @@
+/* -----------------------------
+   Color Variables
+------------------------------ */
+:root {
+    --color-bg: #F3E8DF;        /* background */
+    --color-main: #452829;      /* main color / primary text */
+    --color-sub: #57595B;       /* sub color / secondary text */
+    --color-secondary: #E8D1C5; /* secondary / highlight color */
+}
+
+/* -----------------------------
+   Font
+------------------------------ */
+@font-face {
+    font-family: 'Raleway';
+    src: url('./fonts/Raleway-Regular.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Raleway', sans-serif;
+    background-color: #F3E8DF; /* background */
+    color: #452829; /* main text color */
+}
+
+/* -----------------------------
+   Headings
+------------------------------ */
+h1, h2, h3, h4, h5, h6 {
+    color: #452829;
+    font-weight: 400; /* regular weight */
+    margin: 0 0 0.5rem 0;
+}
+
+/* -----------------------------
+   Links
+------------------------------ */
+a {
+    color: #57595B; /* sub color */
+    text-decoration: none;
+}
+
+a:hover {
+    color: #E8D1C5; /* secondary color on hover */
+}
+
+/* -----------------------------
+   Buttons
+------------------------------ */
+button {
+    font-family: 'Raleway', sans-serif;
+    background-color: #452829; /* main */
+    color: #F3E8DF; /* text on button */
+    border: none;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: background-color 0.3s ease;
+}
+
+button:hover {
+    background-color: #57595B; /* sub */
+    color: #E8D1C5; /* secondary text on hover */
+}
+
+/* -----------------------------
+   Links / secondary buttons
+------------------------------ */
+.button-secondary {
+    background-color: #E8D1C5;
+    color: #452829;
+}
+
+.button-secondary:hover {
+    background-color: #57595B;
+    color: #F3E8DF;
+}
+
+/* -----------------------------
+   Containers / Sections
+------------------------------ */
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1rem;
+}
+
+.break {
+     height: .2rem;
+     background-color: var(--color-sub);
+     margin-top: 1rem;
+     margin-bottom: 1.2rem;
+}
+
+/* -----------------------------
+   Lists
+------------------------------ */
+ul, ol {
+    padding-left: 1.5rem;
+}
+
+li {
+    margin-bottom: 0.5rem;
+}
+
+/* -----------------------------
+   Inputs
+------------------------------ */
+input, select, textarea {
+    font-family: 'Raleway', sans-serif;
+    padding: 0.5rem;
+    border: 1px solid #57595B; /* sub color */
+    border-radius: 4px;
+    background-color: #F3E8DF; /* bg */
+    color: #452829; /* main */
+}
+
+input:focus, textarea:focus, select:focus {
+    outline: 2px solid #E8D1C5; /* secondary highlight */
+}
+
+/* -----------------------------
+   Tables
+------------------------------ */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+}
+
+th, td {
+    border: 1px solid #57595B;
+    padding: 0.5rem;
+    text-align: left;
+}
+
+th {
+    background-color: #452829;
+    color: #F3E8DF;
+}
+
+tr:nth-child(even) {
+    background-color: #E8D1C5;
+}
+
+/* -----------------------------
+   Utility classes
+------------------------------ */
+.text-main { color: #452829; }
+.text-sub { color: #57595B; }
+.text-secondary { color: #E8D1C5; }
+
+.bg-main { background-color: #452829; color: #F3E8DF; }
+.bg-sub { background-color: #57595B; color: #F3E8DF; }
+.bg-secondary { background-color: #E8D1C5; color: #452829; }
