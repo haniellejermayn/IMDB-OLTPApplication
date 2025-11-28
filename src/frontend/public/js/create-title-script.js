@@ -18,6 +18,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
+  const backLink = document.getElementById("back");
+  if (editTconst) {
+    backLink.text = "Back to Browse"
+    backLink.href = "/browse"; // Go back to Browse if editing
+  } else {
+    backLink.href = "/"; // Default back to Dashboard
+  }
+
   // Load title data when editing -------------------------------------------
   async function loadExistingTitle(tconst) {
     try {

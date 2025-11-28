@@ -26,6 +26,34 @@ body {
     color: #452829; /* main text color */
 }
 
+#nav-bar {
+    display: flex;
+    justify-content: flex-start;
+    gap: 2rem; 
+    padding: 0.2rem 1rem;
+    background-color: #452829;
+    color: white;
+    z-index: 1000; 
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    margin-bottom: 1rem;
+    border-radius: 0.5rem;
+}
+
+#nav-bar a {
+    color: white;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 1rem;
+    padding: 0.5rem 1rem;
+    border-radius: 5px;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+#nav-bar a:hover {
+    background-color: #E83D3D;
+    color: #fff;
+}
+
 /* -----------------------------
    Headings
 ------------------------------ */
@@ -48,7 +76,7 @@ a {
 }
 
 a:hover {
-    color: #E8D1C5; /* secondary color on hover */
+    color: #37261d;
 }
 
 /* -----------------------------
