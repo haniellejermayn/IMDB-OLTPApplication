@@ -3,6 +3,8 @@ from flask_cors import CORS
 from db_manager import DatabaseManager
 from replication.replication_manager import ReplicationManager
 import logging
+import os
+from initialize_data import initialize_fragments_from_central
 
 app = Flask(__name__)
 CORS(app)
@@ -15,6 +17,11 @@ replication_manager = ReplicationManager(db_manager)
 
 replication_manager.recovery_handler.start_automatic_retry()
 logger.info("Application started with automatic replication retry enabled")
+
+if os.getenv('INITIALIZE_FRAGMENTS') == 'true':
+    logger.info("Initialization flag detected, syncing fragments from central...")
+    initialize_fragments_from_central(db_manager)
+    logger.info("Fragment sync complete")
 
 def clean_result(data):
     """Clean data before sending to frontend"""
@@ -30,6 +37,18 @@ def clean_result(data):
 def health_check():
     """Check node health status"""
     return jsonify(db_manager.check_all_nodes())
+
+@app.route('/initialize-fragments', methods=['POST'])
+def sync_fragments_from_central():
+    """Manual trigger to sync fragments from central with preserved timestamps"""
+    from initialize_data import initialize_fragments_from_central
+    
+    success = initialize_fragments_from_central(db_manager)
+    
+    return jsonify({
+        'success': success,
+        'message': 'Fragment sync complete' if success else 'Sync failed'
+    })
 
 @app.route('/titles', methods=['GET'])
 def get_titles():

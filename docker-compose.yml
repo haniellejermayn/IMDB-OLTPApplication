@@ -16,6 +16,7 @@ services:
       - distributed-net
     environment:
       - FLASK_ENV=development
+      # - INITIALIZE_FRAGMENTS=true # TODO: enable for first-time setup (disable for recovery testing)
     volumes:
       - ./src/backend:/app
     command: python app.py

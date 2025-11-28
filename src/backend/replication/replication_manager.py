@@ -74,14 +74,12 @@ class ReplicationManager:
         primary_node = self._get_primary_node(title_type)
         central_node = 'node1'
         
-        # First, check if primary fragment is available
         primary_available = self.db.check_node(primary_node)
         
         if primary_available:
             # === CASE A: Primary fragment is UP ===
-            # Generate ID from central first (in separate quick transaction)
             try:
-                tconst = self._get_new_tconst()  # Your original method is fine here
+                tconst = self._get_new_tconst()
             except Exception as e:
                 return {
                     'success': False,
@@ -89,7 +87,7 @@ class ReplicationManager:
                     'message': 'Cannot proceed without valid ID'
                 }
             
-            # Now insert to primary fragment
+            # Insert to primary fragment (MySQL sets last_updated automatically)
             query = """
                 INSERT INTO titles (tconst, title_type, primary_title, start_year, runtime_minutes, genres)
                 VALUES (%s, %s, %s, %s, %s, %s)
@@ -110,8 +108,26 @@ class ReplicationManager:
             if result_primary['success']:
                 logger.info(f"✓ INSERT to PRIMARY {primary_node} succeeded for {tconst}")
                 
-                # Replicate to central
-                result_central = self.db.execute_query(central_node, query, params)
+                # Fetch the record with its timestamp
+                record = self.db.get_title_by_id(tconst)
+                if 'error' in record:
+                    logger.error(f"✗ Failed to fetch inserted record {tconst}")
+                    return {
+                        'success': False,
+                        'error': 'Insert succeeded but failed to fetch record for replication'
+                    }
+                
+                last_updated = record.get('last_updated')
+                
+                # Replicate to central WITH explicit timestamp
+                replication_query = """
+                    INSERT INTO titles 
+                    (tconst, title_type, primary_title, start_year, runtime_minutes, genres, last_updated)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """
+                replication_params = params + (last_updated,)
+                
+                result_central = self.db.execute_query(central_node, replication_query, replication_params)
                 results[central_node] = result_central
                 
                 if result_central['success']:
@@ -120,8 +136,8 @@ class ReplicationManager:
                         target_node=central_node,
                         operation_type='INSERT',
                         record_id=tconst,
-                        query=query,
-                        params=params,
+                        query=replication_query,  # Log the replication query, not the original
+                        params=replication_params,
                         status='SUCCESS'
                     )
                     logger.info(f"✓ INSERT replicated to CENTRAL for {tconst}")
@@ -141,8 +157,8 @@ class ReplicationManager:
                         target_node=central_node,
                         operation_type='INSERT',
                         record_id=tconst,
-                        query=query,
-                        params=params,
+                        query=replication_query,
+                        params=replication_params,
                         status='PENDING',
                         error_msg=result_central.get('error')
                     )
@@ -160,22 +176,32 @@ class ReplicationManager:
                         'message': f'Insert committed to {primary_node}. Replication to {central_node} queued.'
                     }
             else:
-                # Primary insert failed even though node was up - this is bad
+                # Primary insert failed - try central as fallback
                 logger.error(f"✗ INSERT to PRIMARY {primary_node} failed for {tconst}: {result_primary.get('error')}")
-                
-                # Try central as fallback
                 logger.warning(f"⚠ Attempting central as fallback for {tconst}")
+                
                 result_central = self.db.execute_query(central_node, query, params)
                 results[central_node] = result_central
                 
                 if result_central['success']:
+                    # Fetch record from central to get timestamp
+                    record = self.db.get_title_by_id(tconst)
+                    last_updated = record.get('last_updated')
+                    
+                    replication_query = """
+                        INSERT INTO titles 
+                        (tconst, title_type, primary_title, start_year, runtime_minutes, genres, last_updated)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """
+                    replication_params = params + (last_updated,)
+                    
                     transaction_id = self.transaction_logger.log_replication(
                         source_node=central_node,
                         target_node=primary_node,
                         operation_type='INSERT',
                         record_id=tconst,
-                        query=query,
-                        params=params,
+                        query=replication_query,
+                        params=replication_params,
                         status='PENDING',
                         error_msg=f'{primary_node} insert failed: {result_primary.get("error")}'
                     )
@@ -191,7 +217,6 @@ class ReplicationManager:
                         'message': f'Insert committed to {central_node} (fallback). Queued for {primary_node}.'
                     }
                 else:
-                    # Both failed
                     return {
                         'success': False,
                         'error': 'All target nodes failed',
@@ -200,7 +225,7 @@ class ReplicationManager:
                     }
         
         else:
-            # === CASE B: Primary fragment is DOWN - use central with atomic ID generation ===
+            # === CASE B: Primary fragment is DOWN - atomic insert to central ===
             logger.warning(f"⚠ PRIMARY {primary_node} unavailable, using central with atomic ID generation")
             
             conn = self.db.get_connection(central_node, 'SERIALIZABLE')
@@ -213,13 +238,9 @@ class ReplicationManager:
                 }
             
             try:
-                # Start transaction - this locks the ID generation
                 conn.start_transaction()
-                
-                # Generate ID atomically within this transaction
                 tconst = self._get_new_tconst_transactional(conn)
                 
-                # Insert immediately in same transaction
                 query = """
                     INSERT INTO titles (tconst, title_type, primary_title, start_year, runtime_minutes, genres)
                     VALUES (%s, %s, %s, %s, %s, %s)
@@ -233,22 +254,33 @@ class ReplicationManager:
                     data.get('genres')
                 )
                 
-                cursor = conn.cursor()
+                cursor = conn.cursor(dictionary=True)
                 cursor.execute(query, params)
                 
-                # Commit - releases lock and finalizes insert
+                # Fetch the timestamp that was just created
+                cursor.execute("SELECT last_updated FROM titles WHERE tconst = %s", (tconst,))
+                result_row = cursor.fetchone()
+                last_updated = result_row['last_updated']
+                
                 conn.commit()
                 
                 logger.info(f"✓ ATOMIC INSERT to CENTRAL (fallback) succeeded for {tconst}")
                 
-                # Queue replication to fragment
+                # Queue replication WITH timestamp
+                replication_query = """
+                    INSERT INTO titles 
+                    (tconst, title_type, primary_title, start_year, runtime_minutes, genres, last_updated)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """
+                replication_params = params + (last_updated,)
+                
                 transaction_id = self.transaction_logger.log_replication(
                     source_node=central_node,
                     target_node=primary_node,
                     operation_type='INSERT',
                     record_id=tconst,
-                    query=query,
-                    params=params,
+                    query=replication_query,
+                    params=replication_params,
                     status='PENDING',
                     error_msg=f'{primary_node} was unavailable during insert'
                 )
@@ -329,7 +361,7 @@ class ReplicationManager:
         primary_node = self._get_primary_node(title_type)
         central_node = 'node1'
         
-        # Build query
+        # Build UPDATE query (without last_updated - let MySQL set it)
         set_clauses = []
         params = []
         
@@ -348,10 +380,36 @@ class ReplicationManager:
         results[primary_node] = result_primary
         
         if result_primary['success']:
-            # Fragment succeeded - replicate to central
             logger.info(f"✓ UPDATE to PRIMARY {primary_node} succeeded for {tconst}")
             
-            result_central = self.db.execute_query(central_node, query, tuple(params), isolation_level)
+            # Fetch updated record with new timestamp
+            updated_record = self.db.get_title_by_id(tconst)
+            if 'error' in updated_record:
+                logger.error(f"✗ Failed to fetch updated record {tconst}")
+                return {
+                    'success': False,
+                    'error': 'Update succeeded but failed to fetch record for replication'
+                }
+            
+            last_updated = updated_record.get('last_updated')
+            
+            # Build replication query WITH explicit timestamp
+            replication_set_clauses = []
+            replication_params = []
+            
+            for key, value in data.items():
+                if key != 'tconst':
+                    replication_set_clauses.append(f"{key} = %s")
+                    replication_params.append(value)
+            
+            # Add last_updated to SET clause
+            replication_set_clauses.append("last_updated = %s")
+            replication_params.append(last_updated)
+            replication_params.append(tconst)
+            
+            replication_query = f"UPDATE titles SET {', '.join(replication_set_clauses)} WHERE tconst = %s"
+            
+            result_central = self.db.execute_query(central_node, replication_query, tuple(replication_params), isolation_level)
             results[central_node] = result_central
             
             if result_central['success']:
@@ -360,8 +418,8 @@ class ReplicationManager:
                     target_node=central_node,
                     operation_type='UPDATE',
                     record_id=tconst,
-                    query=query,
-                    params=tuple(params),
+                    query=replication_query,
+                    params=tuple(replication_params),
                     status='SUCCESS'
                 )
                 logger.info(f"✓ UPDATE replicated to CENTRAL {central_node} for {tconst}")
@@ -379,8 +437,8 @@ class ReplicationManager:
                     target_node=central_node,
                     operation_type='UPDATE',
                     record_id=tconst,
-                    query=query,
-                    params=tuple(params),
+                    query=replication_query,
+                    params=tuple(replication_params),
                     status='PENDING',
                     error_msg=result_central.get('error')
                 )
@@ -404,13 +462,32 @@ class ReplicationManager:
             results[central_node] = result_central
             
             if result_central['success']:
+                # Fetch updated record from central
+                updated_record = self.db.get_title_by_id(tconst)
+                last_updated = updated_record.get('last_updated')
+                
+                # Build replication query with timestamp
+                replication_set_clauses = []
+                replication_params = []
+                
+                for key, value in data.items():
+                    if key != 'tconst':
+                        replication_set_clauses.append(f"{key} = %s")
+                        replication_params.append(value)
+                
+                replication_set_clauses.append("last_updated = %s")
+                replication_params.append(last_updated)
+                replication_params.append(tconst)
+                
+                replication_query = f"UPDATE titles SET {', '.join(replication_set_clauses)} WHERE tconst = %s"
+                
                 transaction_id = self.transaction_logger.log_replication(
                     source_node=central_node,
                     target_node=primary_node,
                     operation_type='UPDATE',
                     record_id=tconst,
-                    query=query,
-                    params=tuple(params),
+                    query=replication_query,
+                    params=tuple(replication_params),
                     status='PENDING',
                     error_msg=f'{primary_node} was unavailable'
                 )
