@@ -140,19 +140,35 @@ def test_read_write_conflict():
 @app.route('/test/concurrent-write', methods=['POST'])
 def test_concurrent_write():
     """
-    Test Case 3: Concurrent writes
-    Example: POST /test/concurrent-write
-    Body: {
+    Test Case 3: Concurrent writes ON THE SAME RECORD
+    
+    Example Body:
+    {
+        "tconst": "tt0133093",  # SAME record for all writers
         "updates": [
-            {"tconst": "tt0001", "data": {"runtime_minutes": 120}},
-            {"tconst": "tt0002", "data": {"runtime_minutes": 90}}
+            {"runtime_minutes": 120, "genres": "Action"},
+            {"runtime_minutes": 136, "genres": "Action,Sci-Fi"},
+            {"runtime_minutes": 150, "genres": "Action,Thriller"}
         ],
         "isolation_level": "SERIALIZABLE"
     }
     """
     data = request.json
-    updates = data.get('updates', [])
+    tconst = data.get('tconst')  # NEW: Single tconst for all
+    updates_data = data.get('updates', [])
     isolation_level = data.get('isolation_level', 'READ COMMITTED')
+    
+    if not tconst:
+        return jsonify({'error': 'tconst is required for concurrent write test'}), 400
+    
+    if len(updates_data) < 2:
+        return jsonify({'error': 'Need at least 2 concurrent updates for Case #3'}), 400
+    
+    # Transform to expected format: all updates target same tconst
+    updates = [
+        {'tconst': tconst, 'data': update}
+        for update in updates_data
+    ]
     
     result = replication_manager.test_concurrent_writes(updates, isolation_level)
     return jsonify(clean_result(result))

@@ -1,6 +1,7 @@
 import logging
 import threading
 import time
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -11,148 +12,163 @@ class ConcurrencyTester:
     
     def test_concurrent_reads(self, tconst, isolation_level='READ COMMITTED'):
         """
-        Test Case 1: Concurrent reads on same data
-        Multiple nodes reading simultaneously
+        Test Case 1: Concurrent reads on same data from MULTIPLE NODES
+        Tests if multiple transactions can read simultaneously without blocking
         """
         results = {}
         threads = []
         lock = threading.Lock()
+        start_barrier = threading.Barrier(3)  # Ensure all start together
         
-        # First, find out which nodes have this record
+        # Find which nodes have this record
         title = self.db.get_title_by_id(tconst)
         if 'error' in title:
             return {'error': f'Title {tconst} not found'}
         
         title_type = title.get('title_type')
         
-        # Determine which nodes should have this data
-        # node1 has all, node2 has movies, node3 has non-movies
+        # Determine test nodes
         if title_type == 'movie':
-            nodes_to_test = ['node1', 'node2']
+            test_nodes = ['node1', 'node2', 'node2']  # Test node2 twice for true concurrency
         else:
-            nodes_to_test = ['node1', 'node3']
+            test_nodes = ['node1', 'node3', 'node3']
         
-        def read_from_node(node_name):
-            conn = self.db.get_connection(node_name, isolation_level)
-            if conn:
+        def concurrent_read(node_name, reader_id):
+            """Each reader performs a transaction"""
+            try:
+                # Wait for all readers to be ready
+                start_barrier.wait()
+                
+                start_time = time.time()
+                conn = self.db.get_connection(node_name, isolation_level)
+                
+                if not conn:
+                    with lock:
+                        results[f'{node_name}_{reader_id}'] = {
+                            'success': False,
+                            'error': 'Connection failed'
+                        }
+                    return
+                
                 try:
                     conn.start_transaction()
-                    start_time = time.time()
                     cursor = conn.cursor(dictionary=True)
-                    cursor.execute("SELECT * FROM titles WHERE tconst = %s", (tconst,))
-                    data = cursor.fetchone()
                     
-                    # Simulate some read time to show concurrent behavior
-                    time.sleep(0.1)
+                    # Perform multiple reads to simulate real workload
+                    cursor.execute("SELECT * FROM titles WHERE tconst = %s", (tconst,))
+                    data1 = cursor.fetchone()
+                    
+                    # Second read in same transaction (tests REPEATABLE READ)
+                    cursor.execute("SELECT * FROM titles WHERE tconst = %s", (tconst,))
+                    data2 = cursor.fetchone()
                     
                     conn.commit()
                     end_time = time.time()
                     
                     with lock:
-                        results[node_name] = {
+                        results[f'{node_name}_{reader_id}'] = {
                             'success': True,
-                            'data': data,
-                            'read_time': round(end_time - start_time, 4),
-                            'isolation_level': isolation_level
+                            'node': node_name,
+                            'data': data1,
+                            'repeatable': data1 == data2,
+                            'duration': round(end_time - start_time, 4),
+                            'isolation_level': isolation_level,
+                            'timestamp': datetime.now().isoformat()
                         }
+                        
                 except Exception as e:
                     conn.rollback()
                     with lock:
-                        results[node_name] = {'success': False, 'error': str(e)}
+                        results[f'{node_name}_{reader_id}'] = {
+                            'success': False,
+                            'error': str(e),
+                            'node': node_name
+                        }
                 finally:
                     conn.close()
-            else:
+                    
+            except Exception as e:
                 with lock:
-                    results[node_name] = {'success': False, 'error': 'Connection failed'}
+                    results[f'{node_name}_{reader_id}'] = {
+                        'success': False,
+                        'error': f'Barrier/setup error: {str(e)}'
+                    }
         
-        # Start concurrent reads
-        for node in nodes_to_test:
-            t = threading.Thread(target=read_from_node, args=(node,))
+        # Launch concurrent readers
+        for i, node in enumerate(test_nodes):
+            t = threading.Thread(target=concurrent_read, args=(node, i))
             threads.append(t)
             t.start()
         
-        # Wait for all reads to complete
+        # Wait for completion
         for t in threads:
             t.join()
         
-        # Check consistency across nodes that have the data
-        data_values = []
-        for node, result in results.items():
-            if result.get('success') and result.get('data'):
-                # Compare key fields
-                data_values.append(str(result['data']))
-        
-        consistent = len(set(data_values)) <= 1 if data_values else True
+        # Analyze consistency
+        successful_reads = [r for r in results.values() if r.get('success')]
+        data_values = [str(r['data']) for r in successful_reads if r.get('data')]
+        consistent = len(set(data_values)) <= 1
         
         return {
-            'test': 'concurrent_read',
+            'test': 'concurrent_reads',
+            'test_case': 'Case #1',
             'isolation_level': isolation_level,
             'tconst': tconst,
-            'title_type': title_type,
-            'nodes_tested': nodes_to_test,
+            'nodes_tested': test_nodes,
+            'concurrent_readers': len(test_nodes),
             'results': results,
             'consistent': consistent,
-            'explanation': 'All nodes returned the same data' if consistent else 'Data mismatch detected'
+            'all_reads_succeeded': len(successful_reads) == len(test_nodes),
+            'analysis': {
+                'blocking_observed': any(r.get('duration', 0) > 1 for r in successful_reads),
+                'data_consistent': consistent,
+                'explanation': self._explain_read_behavior(isolation_level, consistent)
+            }
         }
     
     def test_read_write_conflict(self, tconst, new_data, isolation_level='READ COMMITTED'):
         """
-        Test Case 2: One transaction writing while others are reading
-        Demonstrates isolation level effects on dirty reads, etc.
+        Test Case 2: One writer, multiple readers, SAME DATA, SAME TIME
+        Tests isolation levels: dirty reads, non-repeatable reads, phantoms
         """
         results = {
-            'reads_before': {},
-            'write': {},
-            'reads_during': {},
-            'reads_after': {}
+            'original_value': {},
+            'readers': {},
+            'writer': {},
+            'final_value': {}
         }
         lock = threading.Lock()
-        write_started = threading.Event()
-        write_completed = threading.Event()
         
-        # Get original value
+        # Record original
         original = self.db.get_title_by_id(tconst)
         if 'error' in original:
             return {'error': f'Title {tconst} not found'}
         
+        results['original_value'] = original
         title_type = original.get('title_type')
         primary_node = 'node2' if title_type == 'movie' else 'node3'
         
-        def read_during_write(node_name, result_key):
-            """Read that happens while write is in progress"""
-            # Wait for write to start
-            write_started.wait(timeout=5)
-            
-            conn = self.db.get_connection(node_name, isolation_level)
-            if conn:
-                try:
-                    conn.start_transaction()
-                    cursor = conn.cursor(dictionary=True)
-                    cursor.execute("SELECT * FROM titles WHERE tconst = %s", (tconst,))
-                    data = cursor.fetchone()
-                    conn.commit()
-                    
-                    with lock:
-                        results[result_key][node_name] = {
-                            'success': True,
-                            'data': data,
-                            'isolation_level': isolation_level
-                        }
-                except Exception as e:
-                    conn.rollback()
-                    with lock:
-                        results[result_key][node_name] = {'success': False, 'error': str(e)}
-                finally:
-                    conn.close()
+        # Barrier ensures all start simultaneously
+        participant_count = 4  # 1 writer + 3 readers
+        start_barrier = threading.Barrier(participant_count)
         
-        def do_write():
-            """Perform the write operation"""
-            conn = self.db.get_connection(primary_node, isolation_level)
-            if conn:
+        def writer_transaction():
+            """Writer that holds transaction open"""
+            try:
+                start_barrier.wait()
+                start_time = time.time()
+                
+                conn = self.db.get_connection(primary_node, isolation_level)
+                if not conn:
+                    with lock:
+                        results['writer'] = {'success': False, 'error': 'Connection failed'}
+                    return
+                
                 try:
                     conn.start_transaction()
+                    cursor = conn.cursor()
                     
-                    # Build update query
+                    # Build UPDATE
                     set_clauses = []
                     params = []
                     for key, value in new_data.items():
@@ -161,171 +177,398 @@ class ConcurrencyTester:
                             params.append(value)
                     params.append(tconst)
                     
-                    cursor = conn.cursor()
                     query = f"UPDATE titles SET {', '.join(set_clauses)} WHERE tconst = %s"
-                    
-                    # Signal that write has started
-                    write_started.set()
-                    
                     cursor.execute(query, tuple(params))
                     
-                    # Hold the transaction open briefly so readers can see uncommitted state
-                    time.sleep(0.3)
+                    # CRITICAL: Hold transaction open to test concurrent reads
+                    time.sleep(0.5)  # Readers will try to read during this window
                     
                     conn.commit()
-                    write_completed.set()
+                    end_time = time.time()
                     
                     with lock:
-                        results['write'] = {
+                        results['writer'] = {
                             'success': True,
                             'node': primary_node,
-                            'query': query
+                            'duration': round(end_time - start_time, 4),
+                            'new_data': new_data
                         }
+                        
                 except Exception as e:
                     conn.rollback()
-                    write_started.set()
-                    write_completed.set()
                     with lock:
-                        results['write'] = {'success': False, 'error': str(e)}
+                        results['writer'] = {'success': False, 'error': str(e)}
                 finally:
                     conn.close()
+                    
+            except Exception as e:
+                with lock:
+                    results['writer'] = {'success': False, 'error': f'Barrier error: {str(e)}'}
         
-        # Record state before
-        results['reads_before']['original'] = original
+        def reader_transaction(node_name, reader_id):
+            """Reader that tries to read during write"""
+            try:
+                start_barrier.wait()
+                
+                # Small stagger so readers hit during the write
+                time.sleep(0.05 * reader_id)
+                
+                start_time = time.time()
+                conn = self.db.get_connection(node_name, isolation_level)
+                
+                if not conn:
+                    with lock:
+                        results['readers'][f'{node_name}_{reader_id}'] = {
+                            'success': False,
+                            'error': 'Connection failed'
+                        }
+                    return
+                
+                try:
+                    conn.start_transaction()
+                    cursor = conn.cursor(dictionary=True)
+                    
+                    # First read
+                    cursor.execute("SELECT * FROM titles WHERE tconst = %s", (tconst,))
+                    read1 = cursor.fetchone()
+                    
+                    time.sleep(0.1)  # Wait a bit
+                    
+                    # Second read (tests REPEATABLE READ)
+                    cursor.execute("SELECT * FROM titles WHERE tconst = %s", (tconst,))
+                    read2 = cursor.fetchone()
+                    
+                    conn.commit()
+                    end_time = time.time()
+                    
+                    # Check if read saw uncommitted data (dirty read)
+                    saw_uncommitted = False
+                    for key, new_val in new_data.items():
+                        if key in read1 and read1[key] == new_val:
+                            saw_uncommitted = True
+                            break
+                    
+                    with lock:
+                        results['readers'][f'{node_name}_{reader_id}'] = {
+                            'success': True,
+                            'node': node_name,
+                            'read1': read1,
+                            'read2': read2,
+                            'repeatable': read1 == read2,
+                            'dirty_read_detected': saw_uncommitted,
+                            'duration': round(end_time - start_time, 4),
+                            'blocked': end_time - start_time > 0.4
+                        }
+                        
+                except Exception as e:
+                    conn.rollback()
+                    with lock:
+                        results['readers'][f'{node_name}_{reader_id}'] = {
+                            'success': False,
+                            'error': str(e),
+                            'node': node_name
+                        }
+                finally:
+                    conn.close()
+                    
+            except Exception as e:
+                with lock:
+                    results['readers'][f'{node_name}_{reader_id}'] = {
+                        'success': False,
+                        'error': f'Barrier error: {str(e)}'
+                    }
         
-        # Start concurrent readers and writer
+        # Launch 1 writer + 3 readers simultaneously
         threads = []
         
         # Writer thread
-        writer = threading.Thread(target=do_write)
-        threads.append(writer)
+        writer_thread = threading.Thread(target=writer_transaction)
+        threads.append(writer_thread)
+        writer_thread.start()
         
-        # Reader threads (read during write)
-        for node in ['node1', primary_node]:
-            t = threading.Thread(target=read_during_write, args=(node, 'reads_during'))
-            threads.append(t)
+        # Reader threads on different nodes
+        reader_nodes = ['node1', primary_node, primary_node]
+        for i, node in enumerate(reader_nodes):
+            reader_thread = threading.Thread(target=reader_transaction, args=(node, i))
+            threads.append(reader_thread)
+            reader_thread.start()
         
-        # Start all
-        for t in threads:
-            t.start()
-        
-        # Wait for all to complete
+        # Wait for all
         for t in threads:
             t.join()
         
-        # Read after write completes
-        write_completed.wait(timeout=5)
-        time.sleep(0.1)  # Small delay to ensure commit propagates
+        # Read final value
+        time.sleep(0.2)
+        results['final_value'] = self.db.get_title_by_id(tconst)
         
-        for node in ['node1', primary_node]:
-            conn = self.db.get_connection(node, isolation_level)
-            if conn:
-                try:
-                    cursor = conn.cursor(dictionary=True)
-                    cursor.execute("SELECT * FROM titles WHERE tconst = %s", (tconst,))
-                    results['reads_after'][node] = cursor.fetchone()
-                except Exception as e:
-                    results['reads_after'][node] = {'error': str(e)}
-                finally:
-                    conn.close()
+        # Analysis
+        any_dirty_reads = any(
+            r.get('dirty_read_detected', False) 
+            for r in results['readers'].values() 
+            if r.get('success')
+        )
         
-        # Analyze results
-        analysis = self._analyze_read_write_results(results, new_data, isolation_level)
+        any_blocking = any(
+            r.get('blocked', False)
+            for r in results['readers'].values()
+            if r.get('success')
+        )
+        
+        non_repeatable_reads = any(
+            not r.get('repeatable', True)
+            for r in results['readers'].values()
+            if r.get('success')
+        )
         
         return {
             'test': 'read_write_conflict',
+            'test_case': 'Case #2',
             'isolation_level': isolation_level,
             'tconst': tconst,
             'new_data': new_data,
             'results': results,
-            'analysis': analysis
+            'analysis': {
+                'dirty_reads_occurred': any_dirty_reads,
+                'blocking_occurred': any_blocking,
+                'non_repeatable_reads': non_repeatable_reads,
+                'explanation': self._explain_read_write_behavior(
+                    isolation_level, 
+                    any_dirty_reads, 
+                    any_blocking, 
+                    non_repeatable_reads
+                )
+            }
         }
-    
-    def _analyze_read_write_results(self, results, new_data, isolation_level):
-        """Analyze read-write conflict test results"""
-        analysis = {
-            'dirty_read_possible': False,
-            'explanation': ''
-        }
-        
-        # Check if any reads during write saw the new value
-        for node, read_result in results.get('reads_during', {}).items():
-            if read_result.get('success') and read_result.get('data'):
-                for key, new_val in new_data.items():
-                    if key in read_result['data'] and read_result['data'][key] == new_val:
-                        if isolation_level == 'READ UNCOMMITTED':
-                            analysis['dirty_read_possible'] = True
-                            analysis['explanation'] = 'READ UNCOMMITTED allows seeing uncommitted changes (dirty reads)'
-        
-        if isolation_level == 'READ UNCOMMITTED':
-            analysis['explanation'] = 'READ UNCOMMITTED: May see uncommitted data (dirty reads possible)'
-        elif isolation_level == 'READ COMMITTED':
-            analysis['explanation'] = 'READ COMMITTED: Only sees committed data, no dirty reads'
-        elif isolation_level == 'REPEATABLE READ':
-            analysis['explanation'] = 'REPEATABLE READ: Same read returns same result within transaction'
-        elif isolation_level == 'SERIALIZABLE':
-            analysis['explanation'] = 'SERIALIZABLE: Full isolation, transactions appear sequential'
-        
-        return analysis
     
     def test_concurrent_writes(self, updates, isolation_level='READ COMMITTED'):
         """
-        Test Case 3: Concurrent writes
-        Multiple updates happening simultaneously on same/different data
+        Test Case 3: Multiple writers updating SAME RECORD simultaneously
+        Tests deadlocks, lost updates, write conflicts
+        
+        CRITICAL: This tests DATABASE concurrency, not replication!
+        All writes go to the SAME NODE to test locking behavior.
         """
-        results = {}
-        threads = []
+        if not updates or len(updates) < 2:
+            return {'error': 'Need at least 2 concurrent updates for Case #3'}
+        
+        # All updates should be to the SAME tconst for true conflict testing
+        tconst = updates[0]['tconst']
+        
+        # Verify all updates are for same record
+        if not all(u['tconst'] == tconst for u in updates):
+            return {
+                'error': 'Case #3 requires all updates to be on the SAME record',
+                'hint': 'Use same tconst for all updates to test write conflicts'
+            }
+        
+        title = self.db.get_title_by_id(tconst)
+        if 'error' in title:
+            return {'error': f'Title {tconst} not found'}
+        
+        title_type = title.get('title_type')
+        target_node = 'node2' if title_type == 'movie' else 'node3'
+        
+        results = {
+            'original_value': title,
+            'writers': {},
+            'final_value': {},
+            'conflicts': []
+        }
         lock = threading.Lock()
         
-        def write_to_nodes(update_data, index):
-            tconst = update_data['tconst']
-            new_data = update_data['data']
-            
+        # Barrier to ensure simultaneous start
+        start_barrier = threading.Barrier(len(updates))
+        
+        def concurrent_writer(update_data, writer_id):
+            """Each writer tries to update the SAME record"""
             try:
-                start_time = time.time()
-                result = self.replication_manager.update_title(tconst, new_data, isolation_level)
-                end_time = time.time()
+                start_barrier.wait()
                 
-                with lock:
-                    results[f'update_{index}_{tconst}'] = {
-                        'success': result['success'],
-                        'write_time': round(end_time - start_time, 4),
-                        'tconst': tconst,
-                        'new_data': new_data,
-                        'result': result
-                    }
+                start_time = time.time()
+                conn = self.db.get_connection(target_node, isolation_level)
+                
+                if not conn:
+                    with lock:
+                        results['writers'][f'writer_{writer_id}'] = {
+                            'success': False,
+                            'error': 'Connection failed'
+                        }
+                    return
+                
+                try:
+                    conn.start_transaction()
+                    cursor = conn.cursor()
+                    
+                    # Read current value (may cause lock)
+                    cursor.execute("SELECT * FROM titles WHERE tconst = %s FOR UPDATE", (tconst,))
+                    current = cursor.fetchone()
+                    
+                    # Build UPDATE
+                    set_clauses = []
+                    params = []
+                    for key, value in update_data['data'].items():
+                        if key != 'tconst':
+                            set_clauses.append(f"{key} = %s")
+                            params.append(value)
+                    params.append(tconst)
+                    
+                    query = f"UPDATE titles SET {', '.join(set_clauses)} WHERE tconst = %s"
+                    
+                    # Simulate processing time
+                    time.sleep(0.1)
+                    
+                    cursor.execute(query, tuple(params))
+                    
+                    conn.commit()
+                    end_time = time.time()
+                    
+                    with lock:
+                        results['writers'][f'writer_{writer_id}'] = {
+                            'success': True,
+                            'node': target_node,
+                            'data_written': update_data['data'],
+                            'duration': round(end_time - start_time, 4),
+                            'waited_for_lock': end_time - start_time > 0.15,
+                            'timestamp': datetime.now().isoformat()
+                        }
+                        
+                except Exception as e:
+                    conn.rollback()
+                    error_msg = str(e)
+                    
+                    with lock:
+                        results['writers'][f'writer_{writer_id}'] = {
+                            'success': False,
+                            'error': error_msg,
+                            'deadlock': 'deadlock' in error_msg.lower(),
+                            'lock_timeout': 'timeout' in error_msg.lower()
+                        }
+                        
+                        if 'deadlock' in error_msg.lower():
+                            results['conflicts'].append({
+                                'type': 'deadlock',
+                                'writer': writer_id,
+                                'message': error_msg
+                            })
+                            
+                finally:
+                    conn.close()
+                    
             except Exception as e:
                 with lock:
-                    results[f'update_{index}_{tconst}'] = {'success': False, 'error': str(e)}
+                    results['writers'][f'writer_{writer_id}'] = {
+                        'success': False,
+                        'error': f'Setup error: {str(e)}'
+                    }
         
-        # Start concurrent writes
+        # Launch all writers simultaneously
+        threads = []
         for i, update in enumerate(updates):
-            t = threading.Thread(target=write_to_nodes, args=(update, i))
+            t = threading.Thread(target=concurrent_writer, args=(update, i))
             threads.append(t)
             t.start()
         
-        # Wait for all writes to complete
+        # Wait for all
         for t in threads:
             t.join()
         
-        # Verify final state
-        final_states = {}
-        for update in updates:
-            tconst = update['tconst']
-            final_states[tconst] = self.db.get_title_by_id(tconst)
+        # Read final value
+        time.sleep(0.2)
+        results['final_value'] = self.db.get_title_by_id(tconst)
+        
+        # Analysis
+        successful_writers = [
+            w for w in results['writers'].values() 
+            if w.get('success')
+        ]
+        
+        failed_writers = [
+            w for w in results['writers'].values()
+            if not w.get('success')
+        ]
+        
+        deadlocks = len(results['conflicts'])
+        
+        blocking_occurred = any(
+            w.get('waited_for_lock', False)
+            for w in successful_writers
+        )
         
         return {
-            'test': 'concurrent_write',
+            'test': 'concurrent_writes',
+            'test_case': 'Case #3',
             'isolation_level': isolation_level,
-            'updates_attempted': len(updates),
+            'tconst': tconst,
+            'target_node': target_node,
+            'concurrent_writers': len(updates),
             'results': results,
-            'final_states': final_states
+            'analysis': {
+                'successful_writes': len(successful_writers),
+                'failed_writes': len(failed_writers),
+                'deadlocks_detected': deadlocks,
+                'blocking_occurred': blocking_occurred,
+                'serialization_enforced': blocking_occurred or deadlocks > 0,
+                'explanation': self._explain_write_behavior(
+                    isolation_level,
+                    len(successful_writers),
+                    deadlocks,
+                    blocking_occurred
+                )
+            }
         }
     
+    def _explain_read_behavior(self, isolation_level, consistent):
+        if isolation_level == 'READ UNCOMMITTED':
+            return 'READ UNCOMMITTED: Allows dirty reads, lowest isolation, highest concurrency'
+        elif isolation_level == 'READ COMMITTED':
+            return 'READ COMMITTED: No dirty reads, but non-repeatable reads possible'
+        elif isolation_level == 'REPEATABLE READ':
+            return 'REPEATABLE READ: No dirty or non-repeatable reads, but phantom reads possible'
+        else:
+            return 'SERIALIZABLE: Full isolation, transactions appear to execute sequentially'
+    
+    def _explain_read_write_behavior(self, isolation_level, dirty, blocking, non_repeatable):
+        explanations = []
+        
+        if isolation_level == 'READ UNCOMMITTED':
+            explanations.append('READ UNCOMMITTED allows dirty reads')
+            if dirty:
+                explanations.append('✗ Dirty read detected: Reader saw uncommitted changes')
+        elif isolation_level == 'READ COMMITTED':
+            explanations.append('READ COMMITTED prevents dirty reads')
+            if non_repeatable:
+                explanations.append('⚠ Non-repeatable read: Same query returned different results')
+        elif isolation_level == 'REPEATABLE READ':
+            explanations.append('REPEATABLE READ ensures consistent reads within transaction')
+            if blocking:
+                explanations.append('✓ Blocking observed: Writer held lock until commit')
+        else:
+            explanations.append('SERIALIZABLE: Maximum isolation, may cause significant blocking')
+        
+        return ' | '.join(explanations)
+    
+    def _explain_write_behavior(self, isolation_level, successful, deadlocks, blocking):
+        explanations = []
+        
+        if deadlocks > 0:
+            explanations.append(f'✗ {deadlocks} deadlock(s) detected')
+        
+        if blocking:
+            explanations.append('✓ Locking enforced: Writers waited for each other')
+        
+        if isolation_level == 'SERIALIZABLE':
+            explanations.append('SERIALIZABLE: Strictest conflict detection')
+        elif isolation_level == 'REPEATABLE READ':
+            explanations.append('REPEATABLE READ: Row-level locking prevents lost updates')
+        else:
+            explanations.append(f'{isolation_level}: May allow some concurrent writes')
+        
+        explanations.append(f'{successful} writer(s) succeeded')
+        
+        return ' | '.join(explanations)
+    
     def simulate_failure(self, scenario):
-        """
-        Guide for simulating failure scenarios
-        """
+        """Guide for simulating failure scenarios"""
         if scenario == 'fragment_to_central':
             return {
                 'scenario': 'Case #1: Central node failure during replication',

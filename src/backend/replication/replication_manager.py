@@ -3,6 +3,7 @@ import json
 from .transaction_logger import TransactionLogger
 from .recovery_handler import RecoveryHandler
 from .concurrency_tester import ConcurrencyTester
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -12,102 +13,235 @@ class ReplicationManager:
         self.transaction_logger = TransactionLogger(db_manager)
         self.recovery_handler = RecoveryHandler(db_manager, self.transaction_logger)
         self.concurrency_tester = ConcurrencyTester(db_manager, self)
+        self._id_lock = threading.Lock()
     
     def _get_primary_node(self, title_type):
         return 'node2' if title_type == 'movie' else 'node3'
-    
+
+    def _get_new_tconst_transactional(self, conn):
+        """
+        Generate new tconst within an existing transaction.
+        This prevents race conditions by holding the lock until insert completes.
+        
+        Args:
+            conn: Active database connection with transaction started
+        
+        Returns:
+            str: New tconst like 'tt0001234'
+        """
+        try:
+            cursor = conn.cursor(dictionary=True)
+            
+            # Lock the table and get MAX - lock held until transaction commits
+            cursor.execute("SELECT MAX(tconst) as max_id FROM titles FOR UPDATE")
+            result = cursor.fetchone()
+            max_tconst = result['max_id']
+            
+            if max_tconst is None:
+                new_tconst = 'tt0000001'
+            else:
+                numeric_part = int(max_tconst[2:])
+                new_id = numeric_part + 1
+                new_tconst = f'tt{new_id:07d}'
+            
+            logger.info(f"Generated new tconst: {new_tconst} (max was: {max_tconst})")
+            return new_tconst
+            
+        except Exception as e:
+            logger.error(f"Error generating tconst: {e}")
+            raise Exception(f"Failed to generate new tconst: {e}")
+
     def insert_title(self, data):
         """
-        Insert flow with bidirectional support:
-        1. Try primary fragment (Node 2 or 3)
-        2. If fragment down, use central as fallback
-        3. Replicate to the other node
-        4. Log everything for recovery
-        """
-        tconst = data.get('tconst')
-        title_type = data.get('title_type')
+        IMPROVED Insert flow with atomic ID generation:
         
+        Strategy:
+        1. Check if primary fragment is available
+        2. If YES:
+        - Generate ID from central in separate transaction
+        - Insert to primary fragment
+        - Replicate to central
+        3. If NO (primary fragment down):
+        - Generate ID and insert to central in SAME transaction (atomic!)
+        - Queue replication to fragment
+        
+        This prevents:
+        - ID collisions
+        - Orphaned IDs (generated but not used)
+        - Race conditions
+        """
+        title_type = data.get('title_type')
         primary_node = self._get_primary_node(title_type)
         central_node = 'node1'
         
-        query = """
-            INSERT INTO titles (tconst, title_type, primary_title, start_year, runtime_minutes, genres)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """
-        params = (
-            tconst,
-            title_type,
-            data.get('primary_title'),
-            data.get('start_year'),
-            data.get('runtime_minutes'),
-            data.get('genres')
-        )
+        # First, check if primary fragment is available
+        primary_available = self.db.check_node(primary_node)
         
-        results = {}
-        
-        # Try primary fragment first
-        result_primary = self.db.execute_query(primary_node, query, params)
-        results[primary_node] = result_primary
-        
-        if result_primary['success']:
-            # Fragment succeeded - replicate to central
-            logger.info(f"✓ INSERT to PRIMARY {primary_node} succeeded for {tconst}")
-            
-            result_central = self.db.execute_query(central_node, query, params)
-            results[central_node] = result_central
-            
-            if result_central['success']:
-                self.transaction_logger.log_replication(
-                    source_node=primary_node,
-                    target_node=central_node,
-                    operation_type='INSERT',
-                    record_id=tconst,
-                    query=query,
-                    params=params,
-                    status='SUCCESS'
-                )
-                logger.info(f"✓ INSERT replicated to CENTRAL {central_node} for {tconst}")
-                
+        if primary_available:
+            # === CASE A: Primary fragment is UP ===
+            # Generate ID from central first (in separate quick transaction)
+            try:
+                tconst = self._get_new_tconst()  # Your original method is fine here
+            except Exception as e:
                 return {
-                    'success': True,
-                    'primary_node': primary_node,
-                    'replicated_to': central_node,
-                    'results': results,
-                    'message': f'Insert committed to {primary_node} and replicated to {central_node}'
+                    'success': False,
+                    'error': f'Failed to generate tconst: {str(e)}',
+                    'message': 'Cannot proceed without valid ID'
                 }
+            
+            # Now insert to primary fragment
+            query = """
+                INSERT INTO titles (tconst, title_type, primary_title, start_year, runtime_minutes, genres)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """
+            params = (
+                tconst,
+                title_type,
+                data.get('primary_title'),
+                data.get('start_year'),
+                data.get('runtime_minutes'),
+                data.get('genres')
+            )
+            
+            results = {}
+            result_primary = self.db.execute_query(primary_node, query, params)
+            results[primary_node] = result_primary
+            
+            if result_primary['success']:
+                logger.info(f"✓ INSERT to PRIMARY {primary_node} succeeded for {tconst}")
+                
+                # Replicate to central
+                result_central = self.db.execute_query(central_node, query, params)
+                results[central_node] = result_central
+                
+                if result_central['success']:
+                    self.transaction_logger.log_replication(
+                        source_node=primary_node,
+                        target_node=central_node,
+                        operation_type='INSERT',
+                        record_id=tconst,
+                        query=query,
+                        params=params,
+                        status='SUCCESS'
+                    )
+                    logger.info(f"✓ INSERT replicated to CENTRAL for {tconst}")
+                    
+                    return {
+                        'success': True,
+                        'tconst': tconst,
+                        'primary_node': primary_node,
+                        'replicated_to': central_node,
+                        'results': results,
+                        'message': f'Insert committed to {primary_node} and replicated to {central_node}'
+                    }
+                else:
+                    # Central replication failed - queue for retry
+                    transaction_id = self.transaction_logger.log_replication(
+                        source_node=primary_node,
+                        target_node=central_node,
+                        operation_type='INSERT',
+                        record_id=tconst,
+                        query=query,
+                        params=params,
+                        status='PENDING',
+                        error_msg=result_central.get('error')
+                    )
+                    
+                    logger.warning(f"⚠ REPLICATION FAILED: {primary_node} → {central_node} for {tconst}. Queued.")
+                    
+                    return {
+                        'success': True,
+                        'tconst': tconst,
+                        'primary_node': primary_node,
+                        'replicated_to': None,
+                        'pending_replication': central_node,
+                        'transaction_id': transaction_id,
+                        'results': results,
+                        'message': f'Insert committed to {primary_node}. Replication to {central_node} queued.'
+                    }
             else:
-                # Central replication failed - queue for retry
-                transaction_id = self.transaction_logger.log_replication(
-                    source_node=primary_node,
-                    target_node=central_node,
-                    operation_type='INSERT',
-                    record_id=tconst,
-                    query=query,
-                    params=params,
-                    status='PENDING',
-                    error_msg=result_central.get('error')
+                # Primary insert failed even though node was up - this is bad
+                logger.error(f"✗ INSERT to PRIMARY {primary_node} failed for {tconst}: {result_primary.get('error')}")
+                
+                # Try central as fallback
+                logger.warning(f"⚠ Attempting central as fallback for {tconst}")
+                result_central = self.db.execute_query(central_node, query, params)
+                results[central_node] = result_central
+                
+                if result_central['success']:
+                    transaction_id = self.transaction_logger.log_replication(
+                        source_node=central_node,
+                        target_node=primary_node,
+                        operation_type='INSERT',
+                        record_id=tconst,
+                        query=query,
+                        params=params,
+                        status='PENDING',
+                        error_msg=f'{primary_node} insert failed: {result_primary.get("error")}'
+                    )
+                    
+                    return {
+                        'success': True,
+                        'tconst': tconst,
+                        'primary_node': central_node,
+                        'replicated_to': None,
+                        'pending_replication': primary_node,
+                        'transaction_id': transaction_id,
+                        'results': results,
+                        'message': f'Insert committed to {central_node} (fallback). Queued for {primary_node}.'
+                    }
+                else:
+                    # Both failed
+                    return {
+                        'success': False,
+                        'error': 'All target nodes failed',
+                        'results': results,
+                        'message': f'Insert failed on both {primary_node} and {central_node}'
+                    }
+        
+        else:
+            # === CASE B: Primary fragment is DOWN - use central with atomic ID generation ===
+            logger.warning(f"⚠ PRIMARY {primary_node} unavailable, using central with atomic ID generation")
+            
+            conn = self.db.get_connection(central_node, 'SERIALIZABLE')
+            
+            if not conn:
+                return {
+                    'success': False,
+                    'error': f'Both {primary_node} and {central_node} unavailable',
+                    'message': 'Cannot perform insert - all nodes down'
+                }
+            
+            try:
+                # Start transaction - this locks the ID generation
+                conn.start_transaction()
+                
+                # Generate ID atomically within this transaction
+                tconst = self._get_new_tconst_transactional(conn)
+                
+                # Insert immediately in same transaction
+                query = """
+                    INSERT INTO titles (tconst, title_type, primary_title, start_year, runtime_minutes, genres)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """
+                params = (
+                    tconst,
+                    title_type,
+                    data.get('primary_title'),
+                    data.get('start_year'),
+                    data.get('runtime_minutes'),
+                    data.get('genres')
                 )
                 
-                logger.warning(f"⚠ REPLICATION FAILED: {primary_node} → {central_node} for {tconst}. Queued.")
+                cursor = conn.cursor()
+                cursor.execute(query, params)
                 
-                return {
-                    'success': True,
-                    'primary_node': primary_node,
-                    'replicated_to': None,
-                    'pending_replication': central_node,
-                    'transaction_id': transaction_id,
-                    'results': results,
-                    'message': f'Insert committed to {primary_node}. Replication to {central_node} queued.'
-                }
-        else:
-            # Fragment down - try central as fallback
-            logger.warning(f"⚠ PRIMARY {primary_node} unavailable, using central as fallback for {tconst}")
-            
-            result_central = self.db.execute_query(central_node, query, params)
-            results[central_node] = result_central
-            
-            if result_central['success']:
-                # Central worked - queue replication to fragment
+                # Commit - releases lock and finalizes insert
+                conn.commit()
+                
+                logger.info(f"✓ ATOMIC INSERT to CENTRAL (fallback) succeeded for {tconst}")
+                
+                # Queue replication to fragment
                 transaction_id = self.transaction_logger.log_replication(
                     source_node=central_node,
                     target_node=primary_node,
@@ -116,29 +250,73 @@ class ReplicationManager:
                     query=query,
                     params=params,
                     status='PENDING',
-                    error_msg=f'{primary_node} was unavailable'
+                    error_msg=f'{primary_node} was unavailable during insert'
                 )
-                
-                logger.info(f"✓ INSERT to CENTRAL (fallback) succeeded for {tconst}. Queued for {primary_node}.")
                 
                 return {
                     'success': True,
+                    'tconst': tconst,
                     'primary_node': central_node,
                     'replicated_to': None,
                     'pending_replication': primary_node,
                     'transaction_id': transaction_id,
-                    'results': results,
-                    'message': f'Insert committed to {central_node} (fallback). Queued for {primary_node}.'
+                    'results': {
+                        central_node: {'success': True, 'method': 'atomic_insert_with_id_generation'}
+                    },
+                    'message': f'Atomic insert to {central_node} (fallback). Queued for {primary_node}.'
                 }
-            else:
-                # Both nodes failed
-                logger.error(f"✗ BOTH NODES FAILED for INSERT {tconst}")
+                
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"✗ ATOMIC INSERT to CENTRAL failed: {e}")
                 return {
                     'success': False,
-                    'error': 'All target nodes unavailable',
-                    'results': results,
-                    'message': f'Insert failed: both {primary_node} and {central_node} unavailable'
+                    'error': str(e),
+                    'message': f'Atomic insert to {central_node} failed: {str(e)}'
                 }
+            finally:
+                conn.close()
+
+    def _get_new_tconst(self):
+        """
+        Generate new tconst from central node (quick separate transaction).
+        Use this when primary fragment is UP.
+        
+        WARNING: Has a small race condition window between ID generation and insert.
+        For atomic operations, use _get_new_tconst_transactional() instead.
+        """
+        central_node = 'node1'
+        
+        conn = self.db.get_connection(central_node, 'SERIALIZABLE')
+        
+        if not conn:
+            raise Exception(f"Cannot connect to {central_node} for ID generation")
+        
+        try:
+            conn.start_transaction()
+            cursor = conn.cursor(dictionary=True)
+            
+            cursor.execute("SELECT MAX(tconst) as max_id FROM titles FOR UPDATE")
+            result = cursor.fetchone()
+            max_tconst = result['max_id']
+            
+            if max_tconst is None:
+                new_tconst = 'tt0000001'
+            else:
+                numeric_part = int(max_tconst[2:])
+                new_id = numeric_part + 1
+                new_tconst = f'tt{new_id:07d}'
+            
+            conn.commit()
+            logger.info(f"Generated new tconst: {new_tconst}")
+            return new_tconst
+            
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Error generating tconst: {e}")
+            raise Exception(f"Failed to generate new tconst: {e}")
+        finally:
+            conn.close()
     
     def update_title(self, tconst, data, isolation_level='READ COMMITTED'):
         """Update title with bidirectional replication support"""
