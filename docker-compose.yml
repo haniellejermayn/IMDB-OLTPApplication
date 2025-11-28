@@ -19,6 +19,8 @@ services:
       # - INITIALIZE_FRAGMENTS=true # TODO: enable for first-time setup (disable for recovery testing)
     volumes:
       - ./src/backend:/app
+      - ./src/frontend/pages:/app/templates 
+      - ./src/frontend/public:/app/public
     command: python app.py
 
   # Node 1 - Central (all data)

@@ -6,7 +6,7 @@ import logging
 import os
 from initialize_data import initialize_fragments_from_central
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder="/app/templates", static_folder="/app/public")
 CORS(app)
 
 logging.basicConfig(level=logging.INFO)
@@ -308,6 +308,9 @@ def test_isolation_levels():
         'tconst': tconst,
         'results': clean_result(results)
     })
+
+from route import register_routes
+register_routes(app)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=80, debug=True)

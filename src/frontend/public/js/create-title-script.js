@@ -1,12 +1,11 @@
-// const API_URL = "http://localhost:80"; // Change to your backend URL
+const API_URL = "http://localhost:80";
 
 const form = document.getElementById("title-form");
 const resultDiv = document.getElementById("result");
 
 form.addEventListener("submit", async (e) => {
     e.preventDefault();
-
-    // Gather form data
+    
     const formData = {
         tconst: document.getElementById("tconst").value.trim(),
         title_type: document.getElementById("title_type").value.trim(),
@@ -20,11 +19,11 @@ form.addEventListener("submit", async (e) => {
 
     try {
         console.log("Form Data: ", formData);
-        /*const res = await fetch(`${API_URL}/title`, {
+        const res = await fetch(`${API_URL}/title`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
-        });*/
+        });
 
         if (res.ok) {
             resultDiv.textContent = `✅ Title ${formData.tconst} created/updated successfully!`;
