@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <meta charset="UTF-8" />
+        <title>Concurrency Tests</title>
+        <link rel="stylesheet" href="../public/css/general.css" />
+        <link rel="stylesheet" href="../public/css/concurrency-tests.css" />
+    </head>
+    <body>
+
+        <div class="container">
+            <h1>CONCURRENCY TESTS</h1>
+
+            <div class="break"></div>
+
+            <div class="case-options-container">
+                <button class="case-option text-main" id="case-1-option"><b>Case 1</b></button>
+                <button class="case-option text-main" id="case-2-option"><b>Case 2</b></button>
+                <button class="case-option text-main" id="case-3-option"><b>Case 3</b></button>
+            </div>
+
+            <div class="case-data-container" id="case-1">
+                <div class="case-header">
+                    <h2>Case #1</h2>
+                    <p>Concurrent transactions in two or more nodes are reading the same data item.</p>
+                    <div class="break"></div>
+                </div>
+                
+    
+                <form id="case-1-form">
+                    <label for="tconst">TCONST:</label>
+                    <input
+                        type="text"
+                        id="tconst"
+                        name="tconst"
+                        placeholder="tt0035423"
+                        required
+                    />
+
+                    <br>
+    
+                    <label for="isolation-level">Isolation Level:</label>
+                    <select name="isolation-level" id="isolation-level">
+                        <option value="serializable">Serializable</option>
+                        <option value="repeatable-read">Repeatable Read</option>
+                        <option value="read-committed">Read Committed</option>
+                        <option value="read-uncommitted">Read Uncommitted</option>
+                    </select>
+                </form>
+    
+                <h1>Results</h1>
+
+                <div class="node-results-container">
+                    <div class="node-result" id="node-1-results">
+                        <h2>Node 1</h2>
+                        <div class="results-content">
+                            <div class="top">
+                                <div class="title"><b>Kate & Leopold</b></div>
+                                <div class="genre">Comedy, Fantasy, Romance</div>
+                            </div>
+                            <div class="bottom">
+                                <div class="row">
+                                    <div class="runtime-minutes">120 minutes</div>
+                                    <div class="separator">|</div>
+                                    <div class="start-year">2001</div>
+                                </div>
+                                <h6 class="last-update">Last updated on 27 Nov 2025</h6>
+                            </div>
+                        </div>
+                        <div class="read-results">
+                            <div class="read-time"><b>Read Time:</b> 0.1024 seconds</div>
+                            <div class="read-status">Successful Read</div>
+                        </div>
+                    </div>
+
+                    <div class="node-result" id="node-2-results">
+                        <h2>Node 2</h2>
+                        <div class="results-content">
+                            <div class="top">
+                                <div class="title"><b>Kate & Leopold</b></div>
+                                <div class="genre">Comedy, Fantasy, Romance</div>
+                            </div>
+                            <div class="bottom">
+                                <div class="row">
+                                    <div class="runtime-minutes">120 minutes</div>
+                                    <div class="separator">|</div>
+                                    <div class="start-year">2001</div>
+                                </div>
+                                <h6 class="last-update">Last updated on 27 Nov 2025</h6>
+                            </div>
+                        </div>
+                        <div class="read-results">
+                            <div class="read-time"><b>Read Time:</b> 0.1059 seconds</div>
+                            <div class="read-status">Unsuccessful Read</div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </body>
+</html>
