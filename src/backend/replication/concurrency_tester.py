@@ -1,6 +1,7 @@
 import logging
 import threading
 import time
+import random
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -10,7 +11,35 @@ class ConcurrencyTester:
         self.db = db_manager
         self.replication_manager = replication_manager
     
-    def test_concurrent_reads(self, tconst, isolation_level='READ COMMITTED'):
+    def _get_test_record(self):
+        """
+        Get a record suitable for testing.
+        Prefers records that exist in both central and fragment nodes.
+        """
+        # Try to get a movie (exists in node1 and node2)
+        conn = self.db.get_connection('node1')
+        if conn:
+            try:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute("""
+                    SELECT tconst, title_type, runtime_minutes 
+                    FROM titles 
+                    WHERE title_type = 'movie' 
+                    AND runtime_minutes IS NOT NULL
+                    LIMIT 1
+                """)
+                record = cursor.fetchone()
+                if record:
+                    return record['tconst']
+            except Exception as e:
+                logger.warning(f"Error getting test record: {e}")
+            finally:
+                conn.close()
+        
+        # Fallback: use a known test record
+        return 'tt0035423'
+    
+    def test_concurrent_reads(self, tconst=None, isolation_level='READ COMMITTED'):
         """
         Test Case 1: Concurrent transactions reading the same data item
         
@@ -22,6 +51,11 @@ class ConcurrencyTester:
         - Tests if reads block each other
         - Tests if reads are consistent
         """
+        # Auto-generate tconst if not provided
+        if not tconst:
+            tconst = self._get_test_record()
+            logger.info(f"[Case #1] Auto-selected test record: {tconst}")
+        
         results = {}
         threads = []
         lock = threading.Lock()
@@ -139,11 +173,12 @@ class ConcurrencyTester:
                 'blocking_observed': any(r.get('duration', 0) > 1 for r in successful_reads),
                 'data_consistent_across_nodes': consistent,
                 'repeatable_reads_working': all(r.get('repeatable', False) for r in successful_reads),
+                'average_duration': round(sum(r.get('duration', 0) for r in successful_reads) / len(successful_reads), 4) if successful_reads else 0,
                 'explanation': self._explain_read_behavior(isolation_level, consistent)
             }
         }
     
-    def test_read_write_conflict(self, tconst, new_data, isolation_level='READ COMMITTED'):
+    def test_read_write_conflict(self, tconst=None, new_data=None, isolation_level='READ COMMITTED'):
         """
         Test Case 2: At least one transaction writing while others read the same data item
         
@@ -155,12 +190,29 @@ class ConcurrencyTester:
         - 2 readers (node1 + fragment) reading during the write
         - Tests dirty reads, non-repeatable reads, blocking behavior
         """
+        # Auto-generate tconst if not provided
+        if not tconst:
+            tconst = self._get_test_record()
+            logger.info(f"[Case #2] Auto-selected test record: {tconst}")
+        
+        # USE PROVIDED DATA OR GENERATE RANDOM
+        if not new_data:
+            unique_runtime = random.randint(1, 300)
+            new_data = {'runtime_minutes': unique_runtime}
+        else:
+            # Extract just the value for logging/metadata if needed
+            unique_runtime = new_data.get('runtime_minutes', random.randint(1, 300))
+
         results = {
             'original_value': {},
             'writers': {},
             'readers': {},
             'final_values': {},
-            'note': 'Tests MySQL isolation across distributed nodes (database-level concurrency)'
+            'test_metadata': {
+                'unique_runtime_for_this_test': unique_runtime,
+                'data_used': new_data,
+                'note': 'Tests MySQL isolation across distributed nodes (database-level concurrency)'
+            }
         }
         lock = threading.Lock()
         
@@ -170,16 +222,17 @@ class ConcurrencyTester:
             return {'error': f'Title {tconst} not found'}
         
         results['original_value'] = original
+        original_runtime = original.get('runtime_minutes')
         title_type = original.get('title_type')
         fragment_node = 'node2' if title_type == 'movie' else 'node3'
         
-        # Build UPDATE query parts BEFORE creating threads
+        # Build UPDATE query parts based on new_data
         set_clauses = []
         params = []
-        for key, value in new_data.items():
-            if key != 'tconst':
-                set_clauses.append(f"{key} = %s")
-                params.append(value)
+        for k, v in new_data.items():
+            set_clauses.append(f"{k} = %s")
+            params.append(v)
+        
         params.append(tconst)
         
         # Setup: 2 writers + 2 readers = 4 participants
@@ -255,7 +308,7 @@ class ConcurrencyTester:
                 start_barrier.wait()
                 time.sleep(0.02 * (reader_id + 1))  # Slight stagger to ensure overlap with writers
                 
-                read_start_time = time.time()  # FIX: Define this variable
+                read_start_time = time.time()
                 conn = self.db.get_connection(node_name, isolation_level)
                 
                 if not conn:
@@ -285,18 +338,24 @@ class ConcurrencyTester:
                     conn.commit()
                     end_time = time.time()
                     
-                    # Detect if reader saw the new value
+                    # Analysis
                     read_during_write = (read1_time - read_start_time) < 0.4
-            
-                    saw_new_value = False
-                    if read1 is not None:
-                        for key, new_val in new_data.items():
-                            if key in read1 and read1[key] == new_val:
-                                saw_new_value = True
-                                break
                     
-                    # Dirty read = saw new value WHILE writer was still uncommitted
-                    is_dirty_read = saw_new_value and read_during_write
+                    # Helper to get specific field or full dict
+                    current_runtime = read1.get('runtime_minutes') if read1 else None
+                    
+                    # Logic: Did we see the SPECIFIC new value being written?
+                    # Note: This simple logic assumes we are updating runtime_minutes. 
+                    # If updating other fields, this specific "dirty read" check might need adjustment.
+                    saw_uncommitted_write = False
+                    if 'runtime_minutes' in new_data:
+                         saw_uncommitted_write = (current_runtime == new_data['runtime_minutes'] and 
+                                                  current_runtime != original_runtime)
+                    
+                    is_dirty_read = saw_uncommitted_write and read_during_write
+                    
+                    # Non-repeatable read = read1 != read2 within same transaction
+                    non_repeatable = read1 != read2
                     
                     # Blocking = transaction took long (reader waited for writer)
                     was_blocked = (end_time - read_start_time) > 0.3
@@ -308,12 +367,15 @@ class ConcurrencyTester:
                             'reader_id': reader_id,
                             'read1': read1,
                             'read2': read2,
+                            'original_runtime': original_runtime,
+                            'read_runtime': current_runtime,
                             'read1_timestamp': round(read1_time - read_start_time, 4),
                             'read2_timestamp': round(read2_time - read_start_time, 4),
                             'read_during_write': read_during_write,
-                            'repeatable': read1 == read2,
-                            'saw_new_value': saw_new_value,
+                            'repeatable': not non_repeatable,
+                            'saw_uncommitted_write': saw_uncommitted_write,
                             'dirty_read_detected': is_dirty_read,
+                            'non_repeatable_read': non_repeatable,
                             'blocked': was_blocked,
                             'duration': round(end_time - read_start_time, 4),
                             'timestamp': datetime.now().isoformat()
@@ -398,13 +460,20 @@ class ConcurrencyTester:
         
         any_dirty_reads = any(r.get('dirty_read_detected', False) for r in successful_readers)
         any_blocking = any(r.get('blocked', False) for r in successful_readers)
-        non_repeatable_reads = any(not r.get('repeatable', True) for r in successful_readers)
+        non_repeatable_reads = any(r.get('non_repeatable_read', False) for r in successful_readers)
         
         # Check if final values are consistent across nodes
-        # Note: This checks database-level consistency, NOT app-level replication
-        final_vals = [str(v) for v in results['final_values'].values() 
-                      if v and (not isinstance(v, dict) or 'error' not in v)]
+        final_vals = []
+        for node, val in results['final_values'].items():
+            if val and not isinstance(val, dict):
+                final_vals.append(str(val))
+            elif val and 'error' not in val:
+                final_vals.append(str(val))
+        
         nodes_consistent = len(set(final_vals)) <= 1 if final_vals else False
+        
+        avg_reader_duration = round(sum(r.get('duration', 0) for r in successful_readers) / len(successful_readers), 4) if successful_readers else 0
+        avg_writer_duration = round(sum(w.get('duration', 0) for w in successful_writers) / len(successful_writers), 4) if successful_writers else 0
         
         return {
             'test': 'read_write_conflict',
@@ -423,13 +492,15 @@ class ConcurrencyTester:
                 'blocking_occurred': any_blocking,
                 'non_repeatable_reads': non_repeatable_reads,
                 'final_state_consistent_across_nodes': nodes_consistent,
+                'average_reader_duration': avg_reader_duration,
+                'average_writer_duration': avg_writer_duration,
                 'explanation': self._explain_read_write_behavior(
                     isolation_level, any_dirty_reads, any_blocking, non_repeatable_reads
                 )
             }
         }
     
-    def test_concurrent_writes(self, tconst, updates, isolation_level='READ COMMITTED'):
+    def test_concurrent_writes(self, updates=None, isolation_level='READ COMMITTED'):
         """
         Test Case 3: Concurrent transactions writing (update/deletion) on the same data item
         
@@ -443,42 +514,80 @@ class ConcurrencyTester:
         - Writer 3 on fragment
         - Tests deadlocks, lost updates, write conflicts
         """
-        if not updates or len(updates) < 2:
-            return {'error': 'Need at least 2 concurrent updates for Case #3'}
+        # Auto-generate tconst if not provided
+        tconst = None
+        writer_configs = []
+
+        # --- BRANCH A: USER PROVIDED UPDATES ---
+        if updates and isinstance(updates, list):
+            # Extract tconst from the first update object
+            tconst = updates[0].get('tconst')
+            logger.info(f"[Case #3] Using provided updates for tconst: {tconst}")
+
+            # Resolve fragment node based on movie type
+            title = self.db.get_title_by_id(tconst)
+            if 'error' in title:
+                return {'error': f'Title {tconst} not found'}
+            
+            title_type = title.get('title_type')
+            fragment_node = 'node2' if title_type == 'movie' else 'node3'
+
+            # Map updates to nodes
+            # Strategy: First update goes to Central, subsequent updates go to Fragment
+            # This ensures distributed conflict
+            for i, update_item in enumerate(updates):
+                target_node = 'node1' if i == 0 else fragment_node
+                writer_configs.append({
+                    'node': target_node,
+                    'data': update_item # Contains {'tconst': '...', 'data': {...}}
+                })
+
+        # --- BRANCH B: AUTO-GENERATE (Fallback) ---
+        else:
+            tconst = self._get_test_record()
+            logger.info(f"[Case #3] Auto-selected test record: {tconst}")
+            
+            title = self.db.get_title_by_id(tconst)
+            if 'error' in title:
+                return {'error': f'Title {tconst} not found'}
+
+            title_type = title.get('title_type')
+            fragment_node = 'node2' if title_type == 'movie' else 'node3'
+
+            # Generate random updates
+            runtime1 = random.randint(1, 100)
+            runtime2 = random.randint(101, 200)
+            runtime3 = random.randint(201, 300)
+
+            updates_generated = [
+                {'tconst': tconst, 'data': {'runtime_minutes': runtime1}},
+                {'tconst': tconst, 'data': {'runtime_minutes': runtime2}},
+                {'tconst': tconst, 'data': {'runtime_minutes': runtime3}}
+            ]
+
+            writer_configs = [
+                {'node': 'node1', 'data': updates_generated[0]},
+                {'node': fragment_node, 'data': updates_generated[1]},
+                {'node': fragment_node, 'data': updates_generated[2]}
+            ]
         
-        # All updates MUST target the SAME tconst
-        if not all(u.get('tconst') == tconst for u in updates):
-            return {
-                'error': 'Case #3 requires all updates to target the SAME record (same tconst)',
-                'hint': 'All updates array items must have the same tconst value'
-            }
-        
-        title = self.db.get_title_by_id(tconst)
-        if 'error' in title:
-            return {'error': f'Title {tconst} not found'}
-        
-        title_type = title.get('title_type')
-        fragment_node = 'node2' if title_type == 'movie' else 'node3'
-        
+        # --- COMMON EXECUTION LOGIC ---
         results = {
-            'original_value': title,
             'writers': {},
             'final_values': {},
-            'conflicts': []
+            'conflicts': [],
+            'test_metadata': {
+                'tconst': tconst,
+                'isolation_level': isolation_level,
+                'note': 'Concurrent writes on same record'
+            }
         }
         lock = threading.Lock()
-        
-        # Writers target DIFFERENT nodes but SAME record
-        writer_configs = [
-            {'node': 'node1', 'data': updates[0]},
-            {'node': fragment_node, 'data': updates[1]},
-            {'node': fragment_node, 'data': updates[2] if len(updates) > 2 else updates[1]}
-        ]
-        
+
         # Barrier to ensure simultaneous start
         start_barrier = threading.Barrier(len(writer_configs))
         
-        def concurrent_writer(node_name, update_data, writer_id):
+        def concurrent_writer(node_name, update_payload, writer_id):
             """Each writer tries to update the SAME record on its node"""
             try:
                 start_barrier.wait()
@@ -499,19 +608,27 @@ class ConcurrencyTester:
                     conn.start_transaction()
                     cursor = conn.cursor()
                     
-                    # Read current value with FOR UPDATE lock
+                    # Read current value with FOR UPDATE lock (simulating careful update)
+                    # Note: In READ UNCOMMITTED/COMMITTED, this might behave differently regarding locks
                     cursor.execute("SELECT * FROM titles WHERE tconst = %s FOR UPDATE", (tconst,))
-                    current = cursor.fetchone()
+                    # MUST READ THE RESULT to clear the cursor buffer!
+                    _ = cursor.fetchall()
                     
                     # Build UPDATE
                     set_clauses = []
                     params = []
-                    for key, value in update_data.get('data', {}).items():
+                    # update_payload['data'] contains the actual fields (runtime_minutes, etc)
+                    data_dict = update_payload.get('data', {})
+                    
+                    for key, value in data_dict.items():
                         if key != 'tconst':
                             set_clauses.append(f"{key} = %s")
                             params.append(value)
                     params.append(tconst)
                     
+                    if not set_clauses:
+                        raise Exception("No data fields to update provided")
+
                     query = f"UPDATE titles SET {', '.join(set_clauses)} WHERE tconst = %s"
                     
                     # Simulate processing time to increase chance of conflicts
@@ -530,16 +647,16 @@ class ConcurrencyTester:
                             'success': True,
                             'node': node_name,
                             'writer_id': writer_id,
-                            'data_written': update_data.get('data'),
+                            'data_written': data_dict,
                             'duration': round(end_time - start_time, 4),
                             'waited_for_lock': end_time - start_time > 0.2,
+                            'rows_affected': cursor.rowcount,
                             'timestamp': datetime.now().isoformat()
                         }
                         
                 except Exception as e:
                     conn.rollback()
                     error_msg = str(e)
-                    
                     logger.error(f"[Case #3] Writer {writer_id} on {node_name} failed: {error_msg}")
                     
                     with lock:
@@ -600,49 +717,46 @@ class ConcurrencyTester:
                 conn1.close()
         
         # Final value on fragment
-        conn_frag = self.db.get_connection(fragment_node)
+        # We need to re-resolve fragment node just in case tconst changed (though unlikely)
+        fragment_node_final = fragment_node 
+        conn_frag = self.db.get_connection(fragment_node_final)
         if conn_frag:
             try:
                 cursor = conn_frag.cursor(dictionary=True)
                 cursor.execute("SELECT * FROM titles WHERE tconst = %s", (tconst,))
-                results['final_values'][fragment_node] = cursor.fetchone()
+                results['final_values'][fragment_node_final] = cursor.fetchone()
             except Exception as e:
-                results['final_values'][fragment_node] = {'error': str(e)}
+                results['final_values'][fragment_node_final] = {'error': str(e)}
             finally:
                 conn_frag.close()
         
         # Analysis
-        successful_writers = [
-            w for w in results['writers'].values() 
-            if w.get('success')
-        ]
-        
-        failed_writers = [
-            w for w in results['writers'].values()
-            if not w.get('success')
-        ]
-        
+        successful_writers = [w for w in results['writers'].values() if w.get('success')]
+        failed_writers = [w for w in results['writers'].values() if not w.get('success')]
         deadlocks = len(results['conflicts'])
         
-        blocking_occurred = any(
-            w.get('waited_for_lock', False)
-            for w in successful_writers
-        )
+        blocking_occurred = any(w.get('waited_for_lock', False) for w in successful_writers)
         
-        # Check consistency across nodes (database-level, not app replication)
-        final_vals = [str(v) for v in results['final_values'].values() 
-                      if v and (not isinstance(v, dict) or 'error' not in v)]
+        # Check consistency
+        final_vals = []
+        for node, val in results['final_values'].items():
+            if val and not isinstance(val, dict):
+                final_vals.append(str(val))
+            elif val and 'error' not in val:
+                final_vals.append(str(val))
+        
         nodes_consistent = len(set(final_vals)) <= 1 if final_vals else False
+        avg_writer_duration = round(sum(w.get('duration', 0) for w in successful_writers) / len(successful_writers), 4) if successful_writers else 0
         
         return {
             'test': 'concurrent_writes',
             'test_case': 'Case #3',
-            'description': 'Concurrent transactions writing (update/deletion) on the same data item',
+            'description': 'Concurrent transactions writing on the same data item',
             'isolation_level': isolation_level,
             'tconst': tconst,
             'nodes_involved': ['node1', fragment_node],
             'concurrent_writers': len(writer_configs),
-            'note': 'Tests how MySQL handles concurrent writes on the same record across nodes',
+            'note': 'Tests conflict handling (Last Write Wins, Deadlocks, or Locking)',
             'results': results,
             'analysis': {
                 'successful_writes': len(successful_writers),
@@ -651,25 +765,33 @@ class ConcurrencyTester:
                 'blocking_occurred': blocking_occurred,
                 'serialization_enforced': blocking_occurred or deadlocks > 0,
                 'final_state_consistent_across_nodes': nodes_consistent,
+                'average_writer_duration': avg_writer_duration,
                 'explanation': self._explain_write_behavior(
-                    isolation_level,
-                    len(successful_writers),
-                    deadlocks,
-                    blocking_occurred
+                    isolation_level, len(successful_writers), deadlocks, blocking_occurred
                 )
             }
         }
     
     def _explain_read_behavior(self, isolation_level, consistent):
         """Explain what's expected for concurrent reads"""
+        explanations = []
+        
         if isolation_level == 'READ UNCOMMITTED':
-            return 'READ UNCOMMITTED: Allows dirty reads, lowest isolation, highest concurrency. All readers should succeed without blocking.'
+            explanations.append('READ UNCOMMITTED: Allows dirty reads, lowest isolation, highest concurrency')
         elif isolation_level == 'READ COMMITTED':
-            return 'READ COMMITTED: No dirty reads, but non-repeatable reads possible. Readers should not block each other.'
+            explanations.append('READ COMMITTED: No dirty reads, but non-repeatable reads possible')
         elif isolation_level == 'REPEATABLE READ':
-            return 'REPEATABLE READ: No dirty or non-repeatable reads. Multiple reads in same transaction return identical results.'
+            explanations.append('REPEATABLE READ: No dirty or non-repeatable reads within transaction')
         else:
-            return 'SERIALIZABLE: Full isolation, transactions appear sequential. May cause more blocking.'
+            explanations.append('SERIALIZABLE: Full isolation, transactions appear sequential')
+        
+        if consistent:
+            explanations.append('✓ Data consistent across all nodes')
+        else:
+            explanations.append('⚠ Data inconsistent across nodes')
+        
+        explanations.append('Readers do not block each other (expected)')
+        return ' '.join(explanations)
     
     def _explain_read_write_behavior(self, isolation_level, dirty, blocking, non_repeatable):
         """Explain read/write interaction behavior"""
