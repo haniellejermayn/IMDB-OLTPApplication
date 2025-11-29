@@ -179,8 +179,37 @@ form button {
 .read-results {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 1.25rem;
     margin-top: 1rem;
+}
+
+.read-results .top {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.read-results .bottom {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+}
+
+.read-results .repeatable {
+    font-weight: bold;
+    color: var(--color-main);
+}
+
+.read-results .end {
+    display: flex;
+    gap: 0.25rem;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.read-results .timestamp {
+    font-style: italic;
+    color: var(--color-sub);
 }
 
 /* temporary read status */
@@ -199,5 +228,24 @@ form button {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
     padding-bottom: 1.25rem;
+}
+
+.results-analysis .explanation {
+    text-align: center;
+}
+
+.json-response {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+.json-content {
+    display: flex;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    background-color: var(--color-bg);
+    white-space:pre-wrap;
 }

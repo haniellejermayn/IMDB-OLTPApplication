@@ -66,12 +66,22 @@
                                     <div class="separator">|</div>
                                     <div class="start-year">2001</div>
                                 </div>
-                                <h6 class="last-update">Last updated on 27 Nov 2025</h6>
+                                <h6 class="last-update">Last updated on 27 Nov 2025 03:28:42</h6>
                             </div>
                         </div>
                         <div class="read-results">
-                            <div class="read-time"><b>Read Time:</b> 0.1024 seconds</div>
-                            <div class="read-status">Successful Read</div>
+                            <div class="top">
+                                <div class="duration"><b>Duration:</b> 0.164 seconds</div>
+                                <div class="read-time-1"><b>1st Read Time:</b> 0.1024 seconds</div>
+                                <div class="read-time-2"><b>2nd Read Time:</b> 0.1627 seconds</div>
+                            </div>
+                            <div class="bottom">
+                                <h5 class="repeatable">Repeatable</h5>
+                                <div class="end">
+                                    <div class="read-status">Successful Read</div>
+                                    <h6 class="timestamp">Read at 2025-11-29 04:07:26</h6>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -92,8 +102,18 @@
                             </div>
                         </div>
                         <div class="read-results">
-                            <div class="read-time"><b>Read Time:</b> 0.1059 seconds</div>
-                            <div class="read-status">Unsuccessful Read</div>
+                            <div class="top">
+                                <div class="duration"><b>Duration:</b> 0.164 seconds</div>
+                                <div class="read-time-1"><b>1st Read Time:</b> 0.1024 seconds</div>
+                                <div class="read-time-2"><b>2nd Read Time:</b> 0.1627 seconds</div>
+                            </div>
+                            <div class="bottom">
+                                <h5 class="repeatable">Non Repeatable</h5>
+                                <div class="end">
+                                    <div class="read-status">Unsuccessful Read</div>
+                                    <h6 class="timestamp">Read at 2025-11-29 04:07:26</h6>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -101,7 +121,99 @@
                 <div class="break"></div>
                 <div class="results-analysis">
                     <h2 class="consistency">Data is consistent</h2>
-                    <div class="explanation">All nodes returned the same data</div>
+                    <h3 class="explanation">READ COMMITTED: No dirty reads, but non-repeatable reads possible. Readers should not block each other.</h3>
+                </div>
+
+                <div class="json-response">
+
+                    <h1>JSON Response</h1>
+
+                    <div class="json-content">
+{
+    "all_reads_succeeded": true,
+    "analysis": {
+        "blocking_observed": false,
+        "data_consistent_across_nodes": true,
+        "explanation": "READ COMMITTED: No dirty reads, but non-repeatable reads possible. Readers should not block each other.",
+        "repeatable_reads_working": true
+    },
+    "concurrent_readers": 3,
+    "consistent": true,
+    "description": "Concurrent transactions in two or more nodes reading the same data item",
+    "isolation_level": "READ COMMITTED",
+    "nodes_tested": [
+        "node1",
+        "node2",
+        "node2"
+    ],
+    "results": {
+        "node1_0": {
+            "data": {
+                "genres": "Comedy;Fantasy;Romance",
+                "last_updated": "Sat, 29 Nov 2025 03:28:42 GMT",
+                "primary_title": "Kate & Leopold",
+                "runtime_minutes": 210,
+                "start_year": 2001,
+                "tconst": "tt0035423",
+                "title_type": "movie"
+            },
+            "duration": 0.164,
+            "isolation_level": "READ COMMITTED",
+            "node": "node1",
+            "read1_time": 0.0612,
+            "read2_time": 0.1627,
+            "reader_id": 0,
+            "repeatable": true,
+            "success": true,
+            "timestamp": "2025-11-29T04:07:26.507920"
+        },
+        "node2_1": {
+            "data": {
+                "genres": "Comedy;Fantasy;Romance",
+                "last_updated": "Sat, 29 Nov 2025 03:28:42 GMT",
+                "primary_title": "Kate & Leopold",
+                "runtime_minutes": 210,
+                "start_year": 2001,
+                "tconst": "tt0035423",
+                "title_type": "movie"
+            },
+            "duration": 0.1627,
+            "isolation_level": "READ COMMITTED",
+            "node": "node2",
+            "read1_time": 0.0611,
+            "read2_time": 0.1622,
+            "reader_id": 1,
+            "repeatable": true,
+            "success": true,
+            "timestamp": "2025-11-29T04:07:26.507675"
+        },
+        "node2_2": {
+            "data": {
+                "genres": "Comedy;Fantasy;Romance",
+                "last_updated": "Sat, 29 Nov 2025 03:28:42 GMT",
+                "primary_title": "Kate & Leopold",
+                "runtime_minutes": 210,
+                "start_year": 2001,
+                "tconst": "tt0035423",
+                "title_type": "movie"
+            },
+            "duration": 0.1778,
+            "isolation_level": "READ COMMITTED",
+            "node": "node2",
+            "read1_time": 0.0755,
+            "read2_time": 0.1773,
+            "reader_id": 2,
+            "repeatable": true,
+            "success": true,
+            "timestamp": "2025-11-29T04:07:26.521383"
+        }
+    },
+    "tconst": "tt0035423",
+    "test": "concurrent_reads",
+    "test_case": "Case #1"
+}
+                    </div>
+                    
                 </div>
             </div>
 
