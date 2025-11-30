@@ -1,1 +1,0 @@
-USE imdb_distributed;

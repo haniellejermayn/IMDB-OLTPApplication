@@ -5,6 +5,8 @@ from replication.replication_manager import ReplicationManager
 import logging
 import os
 from initialize_data import initialize_fragments_from_central
+import subprocess
+import glob
 
 app = Flask(__name__)
 CORS(app)
@@ -49,6 +51,29 @@ def sync_fragments_from_central():
         'success': success,
         'message': 'Fragment sync complete' if success else 'Sync failed'
     })
+
+@app.route('/admin/reset-database', methods=['POST'])
+def reset_database():
+    """
+    Complete database reset and reinitialization pipeline.
+    WARNING: This deletes ALL data!
+    """
+    from initialize_data import reset_and_reinitialize_database
+    
+    try:
+        results = reset_and_reinitialize_database(db_manager)
+        
+        if results['success']:
+            return jsonify(results), 200
+        else:
+            return jsonify(results), 500
+            
+    except Exception as e:
+        logger.error(f"Fatal error during reset: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @app.route('/titles', methods=['GET'])
 def get_titles():
