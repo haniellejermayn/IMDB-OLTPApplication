@@ -71,7 +71,7 @@ class DatabaseManager:
             connect_timeout=5
         )
     
-    def get_connection(self, node_name, isolation_level='READ COMMITTED', retries=3):
+    def get_connection(self, node_name, isolation_level='READ COMMITTED', retries=1):
         """Get database connection with specified isolation level and retry logic"""
         last_error = None
         

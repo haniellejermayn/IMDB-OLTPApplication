@@ -312,43 +312,85 @@ class ReplicationManager:
     def _get_new_tconst(self):
         """
         Generate new tconst from central node (quick separate transaction).
-        Use this when primary fragment is UP.
+        Falls back to fragment nodes if central is unavailable.
         
         WARNING: Has a small race condition window between ID generation and insert.
         For atomic operations, use _get_new_tconst_transactional() instead.
         """
+        # Try central first (has all data)
         central_node = 'node1'
-        
         conn = self.db.get_connection(central_node, 'SERIALIZABLE')
         
-        if not conn:
-            raise Exception(f"Cannot connect to {central_node} for ID generation")
+        if conn:
+            try:
+                conn.start_transaction()
+                cursor = conn.cursor(dictionary=True)
+                
+                cursor.execute("SELECT MAX(tconst) as max_id FROM titles FOR UPDATE")
+                result = cursor.fetchone()
+                max_tconst = result['max_id']
+                
+                if max_tconst is None:
+                    new_tconst = 'tt0000001'
+                else:
+                    numeric_part = int(max_tconst[2:])
+                    new_id = numeric_part + 1
+                    new_tconst = f'tt{new_id:07d}'
+                
+                conn.commit()
+                logger.info(f"Generated new tconst from central: {new_tconst}")
+                return new_tconst
+                
+            except Exception as e:
+                conn.rollback()
+                logger.warning(f"Central unavailable for ID generation: {e}")
+            finally:
+                conn.close()
         
-        try:
-            conn.start_transaction()
-            cursor = conn.cursor(dictionary=True)
-            
-            cursor.execute("SELECT MAX(tconst) as max_id FROM titles FOR UPDATE")
-            result = cursor.fetchone()
-            max_tconst = result['max_id']
-            
-            if max_tconst is None:
-                new_tconst = 'tt0000001'
-            else:
-                numeric_part = int(max_tconst[2:])
-                new_id = numeric_part + 1
-                new_tconst = f'tt{new_id:07d}'
-            
-            conn.commit()
-            logger.info(f"Generated new tconst: {new_tconst}")
+        # Fallback: get max from BOTH fragments and use the higher one
+        logger.warning("Central unavailable, falling back to fragments for ID generation")
+        
+        max_tconst = None
+        
+        for node_name in ['node2', 'node3']:
+            conn = self.db.get_connection(node_name, 'SERIALIZABLE')
+            if conn:
+                try:
+                    conn.start_transaction()
+                    cursor = conn.cursor(dictionary=True)
+                    cursor.execute("SELECT MAX(tconst) as max_id FROM titles FOR UPDATE")
+                    result = cursor.fetchone()
+                    conn.commit()
+                    
+                    node_max = result['max_id']
+                    if node_max:
+                        if max_tconst is None or node_max > max_tconst:
+                            max_tconst = node_max
+                            
+                    logger.info(f"Got max tconst from {node_name}: {node_max}")
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to get max from {node_name}: {e}")
+                    try:
+                        conn.rollback()
+                    except:
+                        pass
+                finally:
+                    conn.close()
+        
+        if max_tconst:
+            numeric_part = int(max_tconst[2:])
+            new_id = numeric_part + 1
+            new_tconst = f'tt{new_id:07d}'
+            logger.info(f"Generated new tconst from fragments: {new_tconst}")
             return new_tconst
-            
-        except Exception as e:
-            conn.rollback()
-            logger.error(f"Error generating tconst: {e}")
-            raise Exception(f"Failed to generate new tconst: {e}")
-        finally:
-            conn.close()
+        
+        # No data anywhere - start fresh
+        if max_tconst is None:
+            logger.info("No existing tconst found, starting from tt0000001")
+            return 'tt0000001'
+        
+        raise Exception("Cannot generate tconst: no nodes available")
     
     def update_title(self, tconst, data, isolation_level='READ COMMITTED'):
         """Update title with bidirectional replication support"""
