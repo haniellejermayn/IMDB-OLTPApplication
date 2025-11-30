@@ -264,3 +264,136 @@ form button {
 #ini-fragment {
     width: 100%;
 }
+
+/* -----------------------------
+   Case 2
+------------------------------ */
+
+/* Row for start year and runtime */
+.row {
+    display: flex;
+    gap: 1rem;
+}
+
+/* Each input in the row takes equal space */
+.row input {
+    flex: 1;
+}
+
+.last-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+}
+
+.original-value, .readers, .writers, .final-values {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.25rem;
+    padding-top: 20px; 
+}
+
+.node-reader {
+    max-width: none;
+    width: 100%;
+    gap: 1.25rem;
+}
+
+.read-content-container, .final-values-container {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    gap: 1.25rem;
+}
+
+.read-1-content, .read-2-content  {
+    width: 100%;
+}
+
+.node-reader .read-results .top {
+    display: flex;
+    flex-direction: row;
+}
+
+.read-results .left, .read-results .right {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 0.75rem;
+}
+
+.read-results .read-status {
+    font-weight: bold;
+    color: #3ad076;
+}
+
+.write-content-container {
+    display: flex;
+    width: 100%;
+    gap: 1.25rem;
+    padding: 0px;
+}
+
+.node-writer {
+    width: 100%;
+    max-width: none;
+}
+
+.final-values-container {
+    display: flex;
+    justify-content: center;
+    gap: 1.25rem;
+}
+
+.analysis-breakdown {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 1.25rem;
+    margin-top: 1.25rem;
+    border-radius: 8px;
+    background-color: var(--color-bg);
+}
+
+.analysis-breakdown-content {
+    display: flex;
+    gap: 7.5rem;
+}
+
+.anomaly-occurrences {
+    display: flex;
+    flex-direction: column;
+}
+
+.anomaly-occurrences p {
+    margin-bottom: 0rem;
+}
+
+.read-write-operations {
+    display: flex;
+    flex-direction: column;
+}
+
+.read-write-operations .top, .read-write-operations .bottom {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0rem;
+}
+
+.read-write-operations p, .read-write-operations h6 {
+    margin-bottom: 0.25rem;
+    text-align: right;
+}
+
+.operation-status.successful {
+    font-weight: bold;
+    color: #3ad076;
+}
+
+.operation-status.unsuccessful {
+    font-weight: bold;
+    color: #e83d3d;
+}
