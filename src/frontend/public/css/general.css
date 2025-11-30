@@ -188,3 +188,34 @@ tr:nth-child(even) {
 .bg-main { background-color: #452829; color: #F3E8DF; }
 .bg-sub { background-color: #57595B; color: #F3E8DF; }
 .bg-secondary { background-color: #E8D1C5; color: #452829; }
+
+/* -----------------------------
+   Codes
+------------------------------ */
+.code-block {
+    background: #1e1e1e;
+    padding: 16px;
+    border-radius: 8px;
+    overflow-x: auto;
+    color: #fff;
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 14px;
+}
+
+.json-content {
+    overflow: visible !important;
+    white-space: normal !important;
+}
+
+.json-content pre.code-block {
+    white-space: pre-wrap !important;  
+    word-wrap: break-word !important; 
+    overflow-wrap: break-word !important;
+    overflow-x: visible !important; 
+}
+
+.string  { color: #ce9178; }
+.number  { color: #b5cea8; }
+.boolean { color: #569cd6; }
+.null    { color: #569cd6; }
+.key     { color: #9cdcfe; }

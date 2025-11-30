@@ -1,267 +1,90 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-        <meta charset="UTF-8" />
-        <title>Concurrency Tests</title>
-        <link rel="stylesheet" href="../public/css/general.css" />
-        <link rel="stylesheet" href="../public/css/concurrency-tests.css" />
-    </head>
-    <body>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Concurrency Tests</title>
+    <link rel="stylesheet" href="../public/css/general.css" />
+    <link rel="stylesheet" href="../public/css/concurrency-tests.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>CONCURRENCY TESTS</h1>
 
-        <div class="container">
-            <h1>CONCURRENCY TESTS</h1>
+      <div class="break"></div>
 
-            <div class="break"></div>
+      <div class="case-options-container">
+        <button class="case-option text-main" id="case-1-option">
+          <b>Case 1</b>
+        </button>
+        <button class="case-option text-main" id="case-2-option">
+          <b>Case 2</b>
+        </button>
+        <button class="case-option text-main" id="case-3-option">
+          <b>Case 3</b>
+        </button>
+      </div>
 
-            <div class="case-options-container">
-                <button class="case-option text-main" id="case-1-option"><b>Case 1</b></button>
-                <button class="case-option text-main" id="case-2-option"><b>Case 2</b></button>
-                <button class="case-option text-main" id="case-3-option"><b>Case 3</b></button>
-            </div>
-
-            <div class="case-data-container" id="case-1">
-                <div class="case-header">
-                    <h2>Case #1</h2>
-                    <p>Concurrent transactions in two or more nodes are reading the same data item.</p>
-                    <div class="break"></div>
-                </div>
-                
-    
-                <form id="case-1-form">
-                    <label for="tconst">TCONST:</label>
-                    <input
-                        type="text"
-                        id="tconst"
-                        name="tconst"
-                        placeholder="tt0035423"
-                        required
-                    />
-
-                    <br>
-    
-                    <label for="isolation-level">Isolation Level:</label>
-                    <select name="isolation-level" id="isolation-level">
-                        <option value="serializable">Serializable</option>
-                        <option value="repeatable-read">Repeatable Read</option>
-                        <option value="read-committed">Read Committed</option>
-                        <option value="read-uncommitted">Read Uncommitted</option>
-                    </select>
-
-                    <button type="submit">Submit</button>
-                </form>
-    
-                <h1>Results</h1>
-
-                <div class="node-results-container">
-                    <div class="node-result" id="node-1-results">
-                        
-                        <h2>Node 1 - Reader 1</h2>
-
-                        <div class="results-content">
-                            <div class="top">
-                                <div class="title"><b>Kate & Leopold</b></div>
-                                <div class="genre">Comedy, Fantasy, Romance</div>
-                            </div>
-                            <div class="bottom">
-                                <div class="row">
-                                    <div class="runtime-minutes">120 minutes</div>
-                                    <div class="separator">|</div>
-                                    <div class="start-year">2001</div>
-                                </div>
-                                <h6 class="last-update">Last updated on 27 Nov 2025 03:28:42</h6>
-                            </div>
-                        </div>
-
-                        <div class="read-results">
-                            <div class="top">
-                                <div class="duration"><b>Duration:</b> 0.164 seconds</div>
-                                <div class="read-time-1"><b>1st Read Time:</b> 0.1024 seconds</div>
-                                <div class="read-time-2"><b>2nd Read Time:</b> 0.1627 seconds</div>
-                            </div>
-                            <div class="bottom">
-                                <h5 class="repeatable">Repeatable</h5>
-                                <div class="end">
-                                    <div class="read-status">Successful Read</div>
-                                    <h6 class="timestamp">Read at 2025-11-29 04:07:26</h6>
-                                </div>
-                            </div>
-                        </div>
-
-                    </div>
-
-                    <div class="node-result" id="node-2-results">
-                        
-                        <h2>Node 2 - Reader 1</h2>
-                        
-                        <div class="results-content">
-                            <div class="top">
-                                <div class="title"><b>Kate & Leopold</b></div>
-                                <div class="genre">Comedy, Fantasy, Romance</div>
-                            </div>
-                            <div class="bottom">
-                                <div class="row">
-                                    <div class="runtime-minutes">120 minutes</div>
-                                    <div class="separator">|</div>
-                                    <div class="start-year">2001</div>
-                                </div>
-                                <h6 class="last-update">Last updated on 27 Nov 2025</h6>
-                            </div>
-                        </div>
-
-                        <div class="read-results">
-                            <div class="top">
-                                <div class="duration"><b>Duration:</b> 0.164 seconds</div>
-                                <div class="read-time-1"><b>1st Read Time:</b> 0.1024 seconds</div>
-                                <div class="read-time-2"><b>2nd Read Time:</b> 0.1627 seconds</div>
-                            </div>
-                            <div class="bottom">
-                                <h5 class="repeatable">Non Repeatable</h5>
-                                <div class="end">
-                                    <div class="read-status">Unsuccessful Read</div>
-                                    <h6 class="timestamp">Read at 2025-11-29 04:07:26</h6>
-                                </div>
-                            </div>
-                        </div>
-                        
-                    </div>
-
-                    <div class="node-result" id="node-2-results">
-                        
-                        <h2>Node 2 - Reader 2</h2>
-                        
-                        <div class="results-content">
-                            <div class="top">
-                                <div class="title"><b>Kate & Leopold</b></div>
-                                <div class="genre">Comedy, Fantasy, Romance</div>
-                            </div>
-                            <div class="bottom">
-                                <div class="row">
-                                    <div class="runtime-minutes">120 minutes</div>
-                                    <div class="separator">|</div>
-                                    <div class="start-year">2001</div>
-                                </div>
-                                <h6 class="last-update">Last updated on 27 Nov 2025</h6>
-                            </div>
-                        </div>
-
-                        <div class="read-results">
-                            <div class="top">
-                                <div class="duration"><b>Duration:</b> 0.164 seconds</div>
-                                <div class="read-time-1"><b>1st Read Time:</b> 0.1024 seconds</div>
-                                <div class="read-time-2"><b>2nd Read Time:</b> 0.1627 seconds</div>
-                            </div>
-                            <div class="bottom">
-                                <h5 class="repeatable">Non Repeatable</h5>
-                                <div class="end">
-                                    <div class="read-status">Unsuccessful Read</div>
-                                    <h6 class="timestamp">Read at 2025-11-29 04:07:26</h6>
-                                </div>
-                            </div>
-                        </div>
-
-                    </div>
-                </div>
-                
-                <div class="break"></div>
-                <div class="results-analysis">
-                    <h2 class="consistency">Data is consistent</h2>
-                    <h3 class="explanation">READ COMMITTED: No dirty reads, but non-repeatable reads possible. Readers should not block each other.</h3>
-                </div>
-
-                <div class="json-response">
-
-                    <h1>JSON Response</h1>
-
-                    <div class="json-content">
-{
-    "all_reads_succeeded": true,
-    "analysis": {
-        "blocking_observed": false,
-        "data_consistent_across_nodes": true,
-        "explanation": "READ COMMITTED: No dirty reads, but non-repeatable reads possible. Readers should not block each other.",
-        "repeatable_reads_working": true
-    },
-    "concurrent_readers": 3,
-    "consistent": true,
-    "description": "Concurrent transactions in two or more nodes reading the same data item",
-    "isolation_level": "READ COMMITTED",
-    "nodes_tested": [
-        "node1",
-        "node2",
-        "node2"
-    ],
-    "results": {
-        "node1_0": {
-            "data": {
-                "genres": "Comedy;Fantasy;Romance",
-                "last_updated": "Sat, 29 Nov 2025 03:28:42 GMT",
-                "primary_title": "Kate & Leopold",
-                "runtime_minutes": 210,
-                "start_year": 2001,
-                "tconst": "tt0035423",
-                "title_type": "movie"
-            },
-            "duration": 0.164,
-            "isolation_level": "READ COMMITTED",
-            "node": "node1",
-            "read1_time": 0.0612,
-            "read2_time": 0.1627,
-            "reader_id": 0,
-            "repeatable": true,
-            "success": true,
-            "timestamp": "2025-11-29T04:07:26.507920"
-        },
-        "node2_1": {
-            "data": {
-                "genres": "Comedy;Fantasy;Romance",
-                "last_updated": "Sat, 29 Nov 2025 03:28:42 GMT",
-                "primary_title": "Kate & Leopold",
-                "runtime_minutes": 210,
-                "start_year": 2001,
-                "tconst": "tt0035423",
-                "title_type": "movie"
-            },
-            "duration": 0.1627,
-            "isolation_level": "READ COMMITTED",
-            "node": "node2",
-            "read1_time": 0.0611,
-            "read2_time": 0.1622,
-            "reader_id": 1,
-            "repeatable": true,
-            "success": true,
-            "timestamp": "2025-11-29T04:07:26.507675"
-        },
-        "node2_2": {
-            "data": {
-                "genres": "Comedy;Fantasy;Romance",
-                "last_updated": "Sat, 29 Nov 2025 03:28:42 GMT",
-                "primary_title": "Kate & Leopold",
-                "runtime_minutes": 210,
-                "start_year": 2001,
-                "tconst": "tt0035423",
-                "title_type": "movie"
-            },
-            "duration": 0.1778,
-            "isolation_level": "READ COMMITTED",
-            "node": "node2",
-            "read1_time": 0.0755,
-            "read2_time": 0.1773,
-            "reader_id": 2,
-            "repeatable": true,
-            "success": true,
-            "timestamp": "2025-11-29T04:07:26.521383"
-        }
-    },
-    "tconst": "tt0035423",
-    "test": "concurrent_reads",
-    "test_case": "Case #1"
-}
-                    </div>
-
-                </div>
-            </div>
-
+      <div class="case-data-container" id="case-1">
+        <div class="case-header">
+          <h2>Case #1</h2>
+          <p>
+            Concurrent transactions in two or more nodes are reading the same
+            data item.
+          </p>
+          <div class="break"></div>
         </div>
 
-    </body>
+        <form id="case-1-form">
+          <label for="tconst">TCONST:</label>
+          <input
+            type="text"
+            id="tconst"
+            name="tconst"
+            placeholder="tt0035423"
+            required
+          />
+
+          <br />
+
+          <label for="isolation-level">Isolation Level:</label>
+          <select name="isolation-level" id="isolation-level">
+            <option value="SERIALIZABLE">Serializable</option>
+            <option value="REPEATABLE READ">Repeatable Read</option>
+            <option value="READ COMMITTED">Read Committed</option>
+            <option value="READ UNCOMMITTED">Read Uncommitted</option>
+          </select>
+
+          <button type="submit">Submit</button>
+        </form>
+
+        <div class="break"></div>
+
+        <h2>Results</h2>
+
+        <div class="node-results-container"></div>
+
+        <div class="results-analysis" style="display: none">
+          <h2>Explanation</h2>
+          <p class="explanation"></p>
+        </div>
+
+        <div class="json-response">
+          <h2>JSON Response</h2>
+          <div class="json-content"></div>
+        </div>
+      </div>
+
+      <div class="case-data-container" id="case-2" style="display: none">
+        <h2>Case #2</h2>
+        <p>Placeholder for Case 2 content...</p>
+      </div>
+
+      <div class="case-data-container" id="case-3" style="display: none">
+        <h2>Case #3</h2>
+        <p>Placeholder for Case 3 content...</p>
+      </div>
+    </div>
+
+    <script src="../public/js/concurrency-tests-script.js"></script>
+  </body>
 </html>

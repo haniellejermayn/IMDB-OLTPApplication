@@ -44,13 +44,14 @@ body {
 }
 
 .case-option:hover {
-    background-color: var(--color-sub);
+    background-color: var(--color-main);
+    color: white;
 }
 
-/* Current selected case option */
-#case-1-option {
-    background-color: var(--color-sub);
-    color: var(--color-secondary);
+.active-case-btn {
+    background-color: var(--color-main);
+    color: white;
+    border: 1px solid #1a5a8a;
 }
 
 /* Case data container */
@@ -116,136 +117,150 @@ form button {
     margin-top: 0.5rem;
 }
 
-/* Node results container */
+/* NODE CARDS CONTAINER */
 .node-results-container {
     display: flex;
+    flex-direction: row;
+    gap: 1rem;
     flex-wrap: wrap;
-    gap: 1.25rem;
+    justify-content: flex-start;
 }
 
-/* node result card */
+/* NODE CARD */
 .node-result {
+    flex: 1 1 100%; 
+    max-width: 100%;
+    text-align: left;
+    background-color: var(--color-bg);
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    box-sizing: border-box;
+}
+
+.node-name {
+    margin-bottom: 0.8rem;
+}
+
+/* READ RESULTS */
+.read-results {
     display: flex;
     flex-direction: column;
-    width: 100%;
-    max-width: 17.5rem;
-    gap: 1rem;
-    padding: 1.25rem;
-    border-radius: 0.5rem;
-    background-color: var(--color-bg);
+    gap: 0.5rem;
 }
 
-/* data read by each node */
+/* All movie details stacked vertically */
 .results-content {
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
-    padding: 0.625rem;
+    gap: 0.25rem;            
+    padding: 0.625rem 0.75rem; 
     border-radius: 0.5rem;
     background-color: white;
 }
 
-/* data title and genre */
-.results-content .top {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+/* Slight indent for movie details */
+.results-content .detail {
+    margin-left: 0.75rem;
+}
+
+/* Title & genre styling */
+.results-content .title {
+    font-weight: bold;
+    font-size: 1rem;
 }
 
 .results-content .genre {
     color: var(--color-sub);
 }
 
-/* runtime, start year, and last update */
+/* Metadata styling (runtime, year, tconst, etc.) */
 .results-content .bottom {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.25rem;
+    font-size: 0.9rem;
+    color: var(--color-main);
 }
 
-/* runtime and start year row */
-.results-content .row {
+.results-content .bottom .row {
     display: flex;
-    gap: 0.625rem;
+    flex-direction: column; 
+    gap: 0.15rem;
 }
 
-/* last update */
-.results-content .last-update {
+/* Last update & timestamp */
+.results-content .last-update,
+.results-content .timestamp {
     font-style: italic;
     color: var(--color-sub);
 }
 
-/* results of node read */
-.read-results {
-    display: flex;
-    flex-direction: column;
-    gap: 1.25rem;
-    margin-top: 1rem;
-}
-
-.read-results .top {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-
-.read-results .bottom {
-    display: flex;
-    align-items: end;
-    justify-content: space-between;
-}
-
+/* Repeatable and read status */
 .read-results .repeatable {
     font-weight: bold;
     color: var(--color-main);
 }
 
-.read-results .end {
-    display: flex;
-    gap: 0.25rem;
-    flex-direction: column;
-    align-items: flex-end;
-}
-
-.read-results .timestamp {
-    font-style: italic;
-    color: var(--color-sub);
-}
-
-/* temporary read status */
-#node-1-results .read-results .read-status {
-    font-weight: bold;
+.read-results .read-status.successful {
     color: #3ad076;
+    font-weight: bold;
 }
 
-/* temporary read status */
-#node-2-results .read-results .read-status {
-    font-weight: bold;
+.read-results .read-status.failed {
     color: #e83d3d;
+    font-weight: bold;
+}
+
+.bottom-info {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-left: 0;
 }
 
 .results-analysis {
+    margin-top: 1rem;
+    padding: 1rem;
+    background-color: #f9f9f9;
+    border-left: 4px solid #2b8fdb;
+    border-radius: 0.5rem;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
     gap: 0.5rem;
-    padding-bottom: 1.25rem;
 }
 
-.results-analysis .explanation {
-    text-align: center;
+.results-analysis h2 {
+    margin: 0;
+    margin-bottom: 0.2rem;
+    font-size: 1.1rem;
+    color: #1a1a1a;
+}
+
+.results-analysis p, .results-analysis h3 {
+    margin: 0;
+    font-size: 0.95rem;
+    color: #333;
 }
 
 .json-response {
+    margin-top: 1rem;
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
 }
 .json-content {
     display: flex;
-    padding: 1rem;
     border-radius: 0.5rem;
-    background-color: var(--color-bg);
-    white-space:pre-wrap;
+    margin-top: -0.5rem;
+    white-space: pre-wrap;
+}
+
+#ini-frgament-row {
+    display: flex;
+    width: 100%;
+}
+
+#ini-fragment {
+    width: 100%;
 }

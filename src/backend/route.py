@@ -24,3 +24,6 @@ def register_routes(app):
     @app.route("/recovery-tests")
     def recovery_tests():
         return render_template("recovery-tests.html")
+    @app.route("/concurrency")
+    def concurrency():
+        return render_template("concurrency-tests.html")
