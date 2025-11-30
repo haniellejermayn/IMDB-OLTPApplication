@@ -201,7 +201,7 @@ form button {
     color: var(--color-main);
 }
 
-.read-results .read-status.successful {
+.read-results .read-status.success {
     color: #3ad076;
     font-weight: bold;
 }
