@@ -22,7 +22,7 @@ if IN_DOCKER:
     STATIC_FOLDER = "/app/public"
 else:
     BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../frontend")
-    TEMPLATE_FOLDER = BASE_DIR
+    TEMPLATE_FOLDER = os.path.join(BASE_DIR, "pages")
     STATIC_FOLDER = os.path.join(BASE_DIR, "public")
 
 app = Flask(__name__, template_folder=TEMPLATE_FOLDER, static_folder=STATIC_FOLDER)
