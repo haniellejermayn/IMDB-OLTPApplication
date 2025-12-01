@@ -206,7 +206,160 @@
 
       <div class="case-data-container" id="case-3" style="display: none">
         <h2>Case #3</h2>
-        <p>Placeholder for Case 3 content...</p>
+        <p>Concurrent transactions in two or more nodes are writing (update / delete) the same data item.</p>
+        <p>For this case, we will test it on editing runtime minutes and genres.</p>
+        <div class="break"></div>
+
+        <form id="case-3-form">
+          <label for="case-3-tconst">TCONST:</label>
+          <input
+            type="text"
+            id="case-3-tconst"
+            name="tconst"
+            placeholder="tt0035423"
+            required
+          />
+
+          <div>
+            <label for="case-3-runtime_minutes_1">Runtime Minutes:</label>
+            <input
+              type="number"
+              id="case-3-runtime_minutes_1"
+              name="runtime_minutes"
+              placeholder="148"
+            />
+          </div>
+          
+          <div>
+            <label for="case-3-runtime_minutes_2">Runtime Minutes:</label>
+            <input
+              type="number"
+              id="case-3-runtime_minutes_2"
+              name="runtime_minutes"
+              placeholder="148"
+            />
+          </div>
+          
+          <div>
+            <label for="case-3-runtime_minutes_3">Runtime Minutes:</label>
+            <input
+              type="number"
+              id="case-3-runtime_minutes_3"
+              name="runtime_minutes"
+              placeholder="148"
+            />
+          </div>
+
+          <div>
+            <label for="case-3-genres_1">Genres (comma-separated):</label>
+            <input
+              type="text"
+              id="case-3-genres_1"
+              name="runtime_minutes"
+              placeholder="Thriller"
+            />
+          </div>
+
+          <div>
+            <label for="case-3-genres_2">Genres (comma-separated):</label>
+            <input
+              type="text"
+              id="case-3-genres_2"
+              name="runtime_minutes"
+              placeholder="Thriller"
+            />
+          </div>
+
+          <div>
+            <label for="case-3-genres_3">Genres (comma-separated):</label>
+            <input
+              type="text"
+              id="case-3-genres_3"
+              name="runtime_minutes"
+              placeholder="Thriller"
+            />
+          </div>
+
+          <br />
+
+          <label for="case-3-isolation-level">Isolation Level:</label>
+          <select name="isolation-level" id="case-3-isolation-level">
+            <option value="SERIALIZABLE">Serializable</option>
+            <option value="REPEATABLE READ">Repeatable Read</option>
+            <option value="READ COMMITTED">Read Committed</option>
+            <option value="READ UNCOMMITTED">Read Uncommitted</option>
+          </select>
+
+          <div class="last-row">
+            <div class="result" style="margin-top: 1rem"></div>
+            <button type="submit">Submit</button>
+          </div>
+        </form>
+
+        <h2>Results</h2>
+
+        <div class="node-results-container" id="case3-node-results-container">
+            
+            <div id="case3-writers-section" class="writers">
+                <h3>Writers</h3>
+                <div id="case3-writers-container" class="write-content-container"></div>
+            </div>
+
+            <div id="case3-final-values-section" class="final-values">
+                <h3>Final Values</h3>
+                <div
+                id="case3-final-values-container"
+                class="final-values-container"
+                ></div>
+            </div>
+
+        </div>
+
+        <div class="results-analysis">
+          <h2 id="consistency-val-c3" class="consistency"></h2>
+          <div id="explanation-val-c3" class="explanation"></div>
+
+          <div class="analysis-breakdown">
+            <h3>Analysis Breakdown:</h3>
+
+            <div class="analysis-breakdown-content">
+              <div class="anomaly-occurrences">
+                <p class="blocking-anomaly">
+                  <b>Blocking Occurred:</b> <span id="blocking-val-c3"></span>
+                </p>
+
+                <p class="deadlock-anomaly">
+                  <b>Deadlocks Detected:</b> <span id="deadlock-val"></span>
+                </p>
+
+                <p class="serialization-anomaly">
+                  <b>Serialization Enforced:</b> <span id="serialization-val"></span>
+                </p>
+              </div>
+              <div class="read-write-operations">
+                <div class="top">
+                  <p class="operation-status writes-failed">
+                    <b>Failed Writes: </b> <span id="failed-writes-count"></span>
+                  </p>
+                </div>
+                <div class="bottom">
+                  <p class="operation-status writers-succeeded">
+                    <b>Successful Writes: </b> <span id="successful-writes-count"></span>
+                  </p>
+                  <h6 class="avg-duration-writers">
+                    <span id="writers-duration"></span>
+                  </h6>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="json-response-c3" class="json-response">
+          <h2>JSON Response</h2>
+          <div id="json-content-c3" class="json-content"></div>
+        </div>
+
       </div>
     </div>
 

@@ -259,7 +259,7 @@ function buildReaderNodeCard(nodeName, readerIndex, result) {
 /********************************************
  * HELPER — BUILD WRITER NODE RESULT CARD
  ********************************************/
-function buildWriterNodeCard(nodeName, writerIndex, result) {
+function buildWriterNodeCard(nodeName, writerIndex, version, result) {
   if (!result.success) {
     return `
       <div class="node-result">
@@ -277,28 +277,63 @@ function buildWriterNodeCard(nodeName, writerIndex, result) {
   const data = result;
   const statusClass = data.success ? "success" : "failed";
 
-  return `
-    <div class="node-result node-writer" id="${nodeName}-writer">
-      <h2>${nodeName} (Writer ${writerIndex})</h2>
+  if (version === 2) {
 
-      <div class="writer-results minimal">
-        <div class="row info-row">
-          <div><b>Commit Time:</b> ${data.commit_time}s</div>
+    return `
+        <div class="node-result node-writer" id="${nodeName}-writer">
+          <h2>${nodeName} (Writer ${writerIndex})</h2>
+
+          <div class="results-content read-1-content" id="${nodeName}-writer-content">
+                <div class="top">
+                    <div class="row info-row"><b>Genres:</b> ${data.data_written.genres}</div>
+                    <div class="row info-row"><b>Runtime Minutes:</b> ${data.data_written.runtime_minutes} minutes</div>
+                </div>
+
+                </div>
+                <div class="writer-results minimal">
+                  <div class="row info-row">
+                    <div><b>Duration:</b> ${data.duration}s</div>
+                  </div>
+                  <div class="row info-row">
+                    <div><b>Rows Affected:</b> ${data.rows_affected}</div>
+                    <div></div>
+                  </div>
+                  <div class="row status-row">
+                    <div class="write-status ${statusClass}">${data.success ? "Successful Write" : "Unsuccessful Write"}</div>
+                    <div class="timestamp">Written at ${formatDate(data.timestamp)}</div>
+                  </div>
+                </div>
+    
         </div>
-        <div class="row info-row">
-          <div><b>Duration:</b> ${data.duration}s</div>
+      `;
+
+  } else {
+      
+      return `
+        <div class="node-result node-writer" id="${nodeName}-writer">
+          <h2>${nodeName} (Writer ${writerIndex})</h2>
+    
+          <div class="writer-results minimal">
+            <div class="row info-row">
+              <div><b>Commit Time:</b> ${data.commit_time}s</div>
+            </div>
+            <div class="row info-row">
+              <div><b>Duration:</b> ${data.duration}s</div>
+            </div>
+            <div class="row info-row">
+              <div><b>Rows Affected:</b> ${data.rows_affected}</div>
+              <div></div>
+            </div>
+            <div class="row status-row">
+              <div class="write-status ${statusClass}">${data.success ? "Successful Write" : "Unsuccessful Write"}</div>
+              <div class="timestamp">Written at ${formatDate(data.timestamp)}</div>
+            </div>
+          </div>
         </div>
-        <div class="row info-row">
-          <div><b>Rows Affected:</b> ${data.rows_affected}</div>
-          <div></div>
-        </div>
-        <div class="row status-row">
-          <div class="write-status ${statusClass}">${data.success ? "Successful Write" : "Unsuccessful Write"}</div>
-          <div class="timestamp">Written at ${formatDate(data.timestamp)}</div>
-        </div>
-      </div>
-    </div>
-  `;
+      `;
+
+  }
+
 }
 
 /********************************************
@@ -521,6 +556,7 @@ document.getElementById("case-2-form").addEventListener("submit", async (e) => {
       const cardHTML = buildWriterNodeCard(
         key.split("_")[0],
         index,
+        1,
         writers[key]
       );
       writersContainer.innerHTML += cardHTML;
@@ -566,6 +602,163 @@ document.getElementById("case-2-form").addEventListener("submit", async (e) => {
         .average_reader_duration
         ? `Average duration: ${result.analysis.average_reader_duration} seconds`
         : "";
+
+      document.getElementById("writers-duration").textContent = result.analysis
+        .average_writer_duration
+        ? `Average duration: ${result.analysis.average_writer_duration} seconds`
+        : "";
+
+      analysisContainer.style.display = "flex";
+    }
+  } catch (err) {
+    console.error(err);
+    alert("Error contacting server.");
+  }
+});
+
+/********************************************
+ * CASE 3 — FORM SUBMIT HANDLER
+ ********************************************/
+document.getElementById("case-3-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const tconst = document.getElementById("case-3-tconst").value;
+  const runtime_minutes_1 = document.getElementById(
+    "case-3-runtime_minutes_1"
+  ).value;
+  const genres_1 = document.getElementById("case-3-genres_1").value;
+  const runtime_minutes_2 = document.getElementById(
+    "case-3-runtime_minutes_2"
+  ).value;
+  const genres_2 = document.getElementById("case-3-genres_2").value;
+  const runtime_minutes_3 = document.getElementById(
+    "case-3-runtime_minutes_3"
+  ).value;
+  const genres_3 = document.getElementById("case-3-genres_3").value;
+  const iso = document.getElementById("case-3-isolation-level").value;
+
+  const body = {
+    tconst,
+    updates: [
+        {runtime_minutes: runtime_minutes_1,genres: genres_1},
+        {runtime_minutes: runtime_minutes_2,genres: genres_2},
+        {runtime_minutes: runtime_minutes_3,genres: genres_3},
+    ],
+    isolation_level: iso,
+  };
+
+  const jsonSection = document.getElementById("json-response-c3");
+  const jsonBox = document.getElementById("json-content-c3");
+
+  const finalValuesContainer = document.getElementById("case3-final-values-container");
+  const writersContainer = document.getElementById("case3-writers-container");
+
+  const nodeContainer = document.querySelector(".node-results-container");
+  const analysisContainer = document.querySelector(".results-analysis");
+
+  jsonSection.style.display = "none";
+  nodeContainer.style.display = "none";
+  analysisContainer.style.display = "none";
+
+  try {
+    console.log(body);
+
+    const response = await fetch(
+      "http://localhost:80/test/concurrent-write",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }
+    );
+
+    if (!response.ok) {
+      alert("Request failed");
+      return;
+    }
+
+    const result = await response.json();
+    console.log("Server Response:", result);
+
+    /**********************************
+     * A. JSON RESPONSE (formatted)
+     **********************************/
+    jsonBox.innerHTML = `<pre class="code-block" style="white-space: pre-wrap;">${syntaxHighlight(
+      result
+    )}</pre>`;
+    if (result && Object.keys(result).length)
+      jsonSection.style.display = "block";
+
+    /**********************************
+     * B. NODE RESULT CARDS
+     **********************************/
+
+    // Final Values
+    finalValuesContainer.innerHTML = "";
+
+    const finalValues = result.results.final_values;
+
+    let index = 1;
+    for (let key in finalValues) {
+      const cardHTML = buildFinalNodeCard(key, finalValues[key]);
+      finalValuesContainer.innerHTML += cardHTML;
+      index++;
+    }
+
+    if (index > 1) finalValuesContainer.style.display = "flex";
+
+    writersContainer.innerHTML = "";
+
+    const writers = result.results.writers;
+
+    // writers
+    index = 1;
+    for (let key in writers) {
+      const cardHTML = buildWriterNodeCard(
+        key.split("_").pop(),
+        index,
+        2,
+        writers[key]
+      );
+      writersContainer.innerHTML += cardHTML;
+      index++;
+    }
+
+    if (index > 1) writersContainer.style.display = "flex";
+
+    /**********************************
+     * C. ANALYSIS SECTION
+     **********************************/
+    if (result.analysis) {
+      const consistencyEl = analysisContainer.querySelector(".consistency");
+      const explanationEl = analysisContainer.querySelector(".explanation");
+
+      let consistencyText = "";
+      if (result.analysis.final_state_consistent_across_nodes) {
+        consistencyText = "Final states are consistent across all nodes.";
+      } else {
+        consistencyText = "Final states are not consistent across all nodes.";
+      }
+
+      document.getElementById("consistency-val-c3").textContent = consistencyText;
+      document.getElementById("explanation-val-c3").textContent =
+        result.analysis.explanation;
+
+      document.getElementById("blocking-val-c3").textContent =
+        result.analysis.blocking_occurred;
+
+      document.getElementById("deadlock-val").textContent =
+        result.analysis.deadlocks_detected;
+
+      document.getElementById("serialization-val").textContent =
+        result.analysis.serialization_enforced;
+
+
+      document.getElementById("failed-writes-count").textContent =
+        result.analysis.failed_writes || "0";
+
+      document.getElementById("successful-writes-count").textContent =
+        result.analysis.successful_writes || "";
 
       document.getElementById("writers-duration").textContent = result.analysis
         .average_writer_duration
