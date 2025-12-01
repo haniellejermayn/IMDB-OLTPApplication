@@ -30,13 +30,6 @@ if (caseContainers.length > 0) {
     });
 }
 
-const case1Form = document.getElementById('case-1-form');
-
-case1Form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    await handleCase1();
-});
-
 /********************************************
  * JSON PRETTY FORMATTER (console-style)
  ********************************************/
@@ -67,6 +60,13 @@ function syntaxHighlight(json) {
 }
 
 // ================================================
+
+const case1Form = document.getElementById('case-1-form');
+
+case1Form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await handleCase1();
+});
 
 async function handleCase1() {
     try {
@@ -149,7 +149,7 @@ function populateCase1Instructions(steps) {
             extraButton = `<button id="check-step-3">Check Recovery Status</button>`;
         } else if (index === 4) {
             codeBlock = `<div class="code-block">${command}</div>`;
-            extraButton = `<button id="recover-step-5">Recover</button>`;
+            extraButton = `<button id="recover-step-5">Go to Recovery (Case 2)</button>`;
         } else if (index === 0 || index === 3) {
             codeBlock = `<div class="code-block">${command}</div>`;
             extraButton = `<button class="check-health">Check Health</button>`;
@@ -261,36 +261,17 @@ async function checkStatus() {
 }
 
 async function recover() {
-    try {
-        const API_URL = `${API_BASE_URL}/test/failure/central-recovery`;
+    caseContainers.forEach(container => {
+        container.style.display = 'none';
+    });
+    caseButtons.forEach(btn => {
+        btn.style.backgroundColor = 'var(--color-bg)';
+        btn.style.color = 'var(--color-main)';
+    });
 
-        const btn = document.getElementById("recover-step-5");
-        btn.disabled = true;
-        btn.textContent = "Recovering...";
-
-        const res = await fetch(API_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-        });
-
-        const data = await res.json();
-
-        const jsonSection = document.getElementById("case1-json-response");
-        const jsonBox = document.getElementById("case1-json-content");
-
-        jsonBox.innerHTML = `<pre class="code-block" style="white-space: pre-wrap;">${syntaxHighlight(
-            data
-        )}</pre>`;
-        if (data && Object.keys(data).length)
-            jsonSection.style.display = "block";
-
-        btn.disabled = false;
-        btn.textContent = "Recover";
-
-        updateCase1Status()
-    } catch (err) {
-        console.error("Error recovery:", err);
-    }
+    caseContainers[1].style.display = 'flex';
+    caseButtons[1].style.backgroundColor = 'var(--color-sub)';
+    caseButtons[1].style.color = 'var(--color-secondary)';
 }
 
 async function checkHealth() {
@@ -407,6 +388,15 @@ async function handleCase2() {
         const data = await response.json();
         
         updateCase2RecoveryResults(data);
+        
+        const jsonSection = document.getElementById("case1-json-response");
+        const jsonBox = document.getElementById("case1-json-content");
+
+        jsonBox.innerHTML = `<pre class="code-block" style="white-space: pre-wrap;">${syntaxHighlight(
+            data
+        )}</pre>`;
+        if (data && Object.keys(data).length)
+            jsonSection.style.display = "block";
 
         await populateCase2Logs(data.recovered);
 
