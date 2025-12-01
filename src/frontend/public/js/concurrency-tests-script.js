@@ -241,11 +241,11 @@ function buildReaderNodeCard(nodeName, readerIndex, result) {
         </div>
         <div class="row info-row">
           <div><b>Original Runtime:</b> ${data.original_runtime}</div>
-          <div><b>Saw Uncommitted:</b> ${data.saw_uncommitted_write}</div>
+          <div><b>Saw New Value:</b> ${data.saw_new_value}</div>
         </div>
         <div class="row info-row">
           <div><b>Type:</b> ${nonRepeatableText}</div>
-          <div><b>Dirty Read:</b> ${data.dirty_read_detected}</div>
+          <div><b>Values Changes Between Reads:</b> ${data.values_changed_between_reads}</div>
         </div>
         <div class="row info-row">
           <div></div>
@@ -320,16 +320,16 @@ function buildWriterNodeCard(nodeName, writerIndex, version, result) {
           <h2>${nodeName} (Writer ${writerIndex})</h2>
     
           <div class="writer-results minimal">
-            <div class="row info-row">
-              <div><b>Commit Time:</b> ${data.commit_time}s</div>
-            </div>
+            <!--<div class="row info-row">
+              <div><b>Commit Time:</b> ${data.timestamp}s</div>
+            </div>-->
             <div class="row info-row">
               <div><b>Duration:</b> ${data.duration}s</div>
             </div>
-            <div class="row info-row">
+            <!--<div class="row info-row">
               <div><b>Rows Affected:</b> ${data.rows_affected}</div>
               <div></div>
-            </div>
+            </div>-->
             <div class="row status-row">
               <div class="write-status ${statusClass}">${data.success ? "Successful Write" : "Unsuccessful Write"}</div>
               <div class="timestamp">Written at ${formatDate(data.timestamp)}</div>
@@ -600,10 +600,10 @@ document.getElementById("case-2-form").addEventListener("submit", async (e) => {
         result.analysis.explanation;
 
       document.getElementById("dirty-read-val").textContent =
-        result.analysis.dirty_reads_occurred;
+        result.analysis.values_changed_between_reads;
 
-      document.getElementById("nonrepeat-val").textContent =
-        result.analysis.non_repeatable_reads;
+      //document.getElementById("nonrepeat-val").textContent =
+        //result.analysis.non_repeatable_reads;
 
       document.getElementById("blocking-val").textContent =
         result.analysis.blocking_occurred;
@@ -767,9 +767,8 @@ document.getElementById("case-3-form").addEventListener("submit", async (e) => {
       document.getElementById("deadlock-val").textContent =
         result.analysis.deadlocks_detected;
 
-      document.getElementById("serialization-val").textContent =
-        result.analysis.serialization_enforced;
-
+      //document.getElementById("serialization-val").textContent =
+        //result.analysis.serialization_enforced;
 
       document.getElementById("failed-writes-count").textContent =
         result.analysis.failed_writes || "0";

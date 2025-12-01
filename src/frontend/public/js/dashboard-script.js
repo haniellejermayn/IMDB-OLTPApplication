@@ -31,6 +31,10 @@ document.addEventListener("DOMContentLoaded", () => {
             updateNodeStatus("node-1", capitalize(data.node1.status));
             updateNodeStatus("node-2", capitalize(data.node2.status));
             updateNodeStatus("node-3", capitalize(data.node3.status));
+
+            updateTitleCount("node-1", data.node1.record_count);
+            updateTitleCount("node-2", data.node2.record_count);
+            updateTitleCount("node-3", data.node3.record_count)
     
         } catch (error) {
             console.error("Error fetching node status:", error);
@@ -53,6 +57,11 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
             indicator.style.backgroundColor = "#E83D3D";
         } 
+    }
+
+    function updateTitleCount(nodeId, count) {
+        const statusElems = document.querySelector(`#${nodeId} .title-count`);
+        statusElems.textContent = count;
     }
 
     function capitalize(s) {
