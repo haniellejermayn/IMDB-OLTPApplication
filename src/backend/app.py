@@ -1,16 +1,32 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from db_manager import DatabaseManager
 from replication.replication_manager import ReplicationManager
 import logging
 import os
-from initialize_data import initialize_fragments_from_central
-import subprocess
-import glob
 
-app = Flask(__name__, template_folder="/app/templates", static_folder="/app/public")
+def running_in_docker():
+    """Detect if running inside Docker"""
+    if os.path.exists("/.dockerenv"):
+        return True
+    try:
+        with open("/proc/1/cgroup", "rt") as f:
+            return "docker" in f.read() or "kubepods" in f.read()
+    except Exception:
+        return False
+
+IN_DOCKER = running_in_docker()  # define first
+
+if IN_DOCKER:
+    TEMPLATE_FOLDER = "/app/templates"
+    STATIC_FOLDER = "/app/public"
+else:
+    BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../frontend")
+    TEMPLATE_FOLDER = BASE_DIR
+    STATIC_FOLDER = os.path.join(BASE_DIR, "public")
+
+app = Flask(__name__, template_folder=TEMPLATE_FOLDER, static_folder=STATIC_FOLDER)
 CORS(app)
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -20,6 +36,21 @@ replication_manager = ReplicationManager(db_manager)
 replication_manager.recovery_handler.start_automatic_retry()
 logger.info("Application started with automatic replication retry enabled")
 
+# Serve frontend when not in Docker
+if not IN_DOCKER:
+    BASE_DIR = TEMPLATE_FOLDER  # frontend folder
+
+    @app.route("/", defaults={"path": "index.html"})
+    @app.route("/<path:path>")
+    def serve_frontend(path):
+        full_path = os.path.join(BASE_DIR, path)
+        if os.path.isfile(full_path):
+            return send_from_directory(BASE_DIR, path)
+        # Fallback to index.html for SPA routing
+        return send_from_directory(BASE_DIR, "index.html")
+
+# Initial fragment sync if flag is set
+from initialize_data import initialize_fragments_from_central
 if os.getenv('INITIALIZE_FRAGMENTS') == 'true':
     logger.info("Initialization flag detected, syncing fragments from central...")
     initialize_fragments_from_central(db_manager)
