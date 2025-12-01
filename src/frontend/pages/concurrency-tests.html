@@ -79,474 +79,129 @@
 
       <div class="case-data-container" id="case-2" style="display: none">
         <div class="case-header">
-            <h2>Case #2</h2>
-            <p>At least one transaction in the three nodes is writing (update / delete) and the other concurrent transactions are reading the same data item.</p>
-            <div class="break"></div>
+          <h2>Case #2</h2>
+          <p>
+            At least one transaction in the three nodes is writing (update /
+            delete) and the other concurrent transactions are reading the same
+            data item.
+          </p>
+          <p>For this case, we will test it on editing runtime minutes.</p>
+          <div class="break"></div>
         </div>
 
         <form id="case-2-form">
-            <label for="case-2-tconst">TCONST:</label>
+          <label for="case-2-tconst">TCONST:</label>
+          <input
+            type="text"
+            id="case-2-tconst"
+            name="tconst"
+            placeholder="tt0035423"
+            required
+          />
+
+          <div>
+            <label for="case-2-runtime_minutes">Runtime Minutes:</label>
             <input
-                type="text"
-                id="case-2-tconst"
-                name="tconst"
-                placeholder="tt0035423"
-                required
+              type="number"
+              id="case-2-runtime_minutes"
+              name="runtime_minutes"
+              placeholder="148"
             />
+          </div>
 
-            <label for="case-2-title_type">Title Type:</label>
-            <input
-                type="text"
-                id="case-2-title_type"
-                name="title_type"
-                placeholder="movie, short, tvSeries..."
-                
-            />
+          <br />
 
-            <label for="case-2-primary_title">Primary Title:</label>
-            <input
-                type="text"
-                id="case-2-primary_title"
-                name="primary_title"
-                placeholder="Inception"
-                
-            />
+          <label for="case-2-isolation-level">Isolation Level:</label>
+          <select name="isolation-level" id="case-2-isolation-level">
+            <option value="SERIALIZABLE">Serializable</option>
+            <option value="REPEATABLE READ">Repeatable Read</option>
+            <option value="READ COMMITTED">Read Committed</option>
+            <option value="READ UNCOMMITTED">Read Uncommitted</option>
+          </select>
 
-            <div class="row">
-                <div>
-                    <label for="case-2-start_year">Start Year:</label>
-                    <input
-                        type="number"
-                        id="case-2-start_year"
-                        name="start_year"
-                        placeholder="2010"
-                        
-                    />
-                </div>
-
-                <div>
-                    <label for="case-2-runtime_minutes"
-                        >Runtime Minutes:</label
-                    >
-                    <input
-                        type="number"
-                        id="case-2-runtime_minutes"
-                        name="runtime_minutes"
-                        placeholder="148"
-                        
-                    />
-                </div>
-            </div>
-
-            <label for="case-2-genres">Genres (comma-separated):</label>
-            <input
-                type="text"
-                id="case-2-genres"
-                name="genres"
-                placeholder="Action,Adventure,Sci-Fi"
-                
-            />
-
-            <br>
-
-            <label for="case-2-isolation-level">Isolation Level:</label>
-            <select name="isolation-level" id="case-2-isolation-level">
-                <option value="SERIALIZABLE">Serializable</option>
-                <option value="REPEATABLE READ">Repeatable Read</option>
-                <option value="READ COMMITTED">Read Committed</option>
-                <option value="READ UNCOMMITTED">Read Uncommitted</option>
-            </select>
-
-            <div class="last-row">
-                <div class="result" style="margin-top: 1rem"></div>
-                <button type="submit">Submit</button>
-            </div>
+          <div class="last-row">
+            <div class="result" style="margin-top: 1rem"></div>
+            <button type="submit">Submit</button>
+          </div>
         </form>
 
-        <h1>Results</h1>
+        <h2>Results</h2>
 
-        <div class="node-results-container">
-            <div class="original-value">
-                <h2>Original Value</h2>
-                <div class="node-result original-value-container">
-                    <div class="results-content original-value-content">
-                        <div class="top">
-                            <div class="title"><b>Kate & Leopold</b></div>
-                            <div class="genre">Comedy, Fantasy, Romance</div>
-                        </div>
-                        <div class="bottom">
-                            <div class="row">
-                                <div class="runtime-minutes">120 minutes</div>
-                                <div class="separator">|</div>
-                                <div class="start-year">2001</div>
-                            </div>
-                            <h6 class="last-update">Last updated on 27 Nov 2025</h6>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="readers">
-                <h2>Readers</h2>
-                <div class="readers-container">
-                    <div class="node-result node-reader" id="node-1-reader">
-                            <h2>Node 1 (Reader 0)</h2>
-                            <div class="read-content-container">
-                                <div class="results-content read-1-content">
-                                    <div class="top">
-                                        <h3 class="read-1"><b>Read 1</b></h3>
-                                        <div class="title"><b>Kate & Leopold</b></div>
-                                        <div class="genre">Comedy, Fantasy, Romance</div>
-                                    </div>
-                                    <div class="bottom">
-                                        <div class="row">
-                                            <div class="runtime-minutes">120 minutes</div>
-                                            <div class="separator">|</div>
-                                            <div class="start-year">2001</div>
-                                        </div>
-                                        <h6 class="last-update">Last updated on 27 Nov 2025</h6>
-                                    </div>
-                                </div>
-                                <div class="results-content read-2-content">
-                                    <div class="top">
-                                        <h3 class="read-1"><b>Read 2</b></h3>
-                                        <div class="title"><b>Kate & Leopold</b></div>
-                                        <div class="genre">Comedy, Fantasy, Romance</div>
-                                    </div>
-                                    <div class="bottom">
-                                        <div class="row">
-                                            <div class="runtime-minutes">120 minutes</div>
-                                            <div class="separator">|</div>
-                                            <div class="start-year">2001</div>
-                                        </div>
-                                        <h6 class="last-update">Last updated on 27 Nov 2025</h6>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="read-results">
-                                <div class="top">
-                                    <div class="left">
-                                        <div class="duration"><b>Duration:</b> 0.164 seconds</div>
-                                        <div class="blocked"><b>Blocked:</b> False</div>
-                                        <div class="dirty-read-detected"><b>2nd Read Time:</b> True</div>
-                                    </div>
-                                    <div class="right">
-                                        <div class="original-data"><b>Original Runtime:</b> 21</div>
-                                        <div class="read-during-write"><b>Read During Write:</b> True</div>
-                                        <div class="saw-uncommitted-write"><b>Saw Uncommitted Write:</b> True</div>
-                                    </div>
-                                </div>
-                                <div class="bottom">
-                                    <h5 class="repeatable">Non Repeatable</h5>
-                                    <div class="end">
-                                        <div class="read-status">Unsuccessful Read</div>
-                                        <h6 class="timestamp">Read at 2025-11-29 04:07:26</h6>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    <div class="node-reader node-result" id="node-2-reader">
-                            <h2>Node 2 (Reader 1)</h2>
-                            <div class="read-content-container">
-                                <div class="results-content read-1-content">
-                                    <div class="top">
-                                        <h3 class="read-1"><b>Read 1</b></h3>
-                                        <div class="title"><b>Kate & Leopold</b></div>
-                                        <div class="genre">Comedy, Fantasy, Romance</div>
-                                    </div>
-                                    <div class="bottom">
-                                        <div class="row">
-                                            <div class="runtime-minutes">120 minutes</div>
-                                            <div class="separator">|</div>
-                                            <div class="start-year">2001</div>
-                                        </div>
-                                        <h6 class="last-update">Last updated on 27 Nov 2025</h6>
-                                    </div>
-                                </div>
-                                <div class="results-content read-2-content">
-                                    <div class="top">
-                                        <h3 class="read-2"><b>Read 2</b></h3>
-                                        <div class="title"><b>Kate & Leopold</b></div>
-                                        <div class="genre">Comedy, Fantasy, Romance</div>
-                                    </div>
-                                    <div class="bottom">
-                                        <div class="row">
-                                            <div class="runtime-minutes">120 minutes</div>
-                                            <div class="separator">|</div>
-                                            <div class="start-year">2001</div>
-                                        </div>
-                                        <h6 class="last-update">Last updated on 27 Nov 2025</h6>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="read-results">
-                                <div class="top">
-                                    <div class="left">
-                                        <div class="duration"><b>Duration:</b> 0.164 seconds</div>
-                                        <div class="blocked"><b>Blocked:</b> False</div>
-                                        <div class="dirty-read-detected"><b>2nd Read Time:</b> True</div>
-                                    </div>
-                                    <div class="right">
-                                        <div class="original-data"><b>Original Runtime:</b> 21</div>
-                                        <div class="read-during-write"><b>Read During Write:</b> True</div>
-                                        <div class="saw-uncommitted-write"><b>Saw Uncommitted Write:</b> True</div>
-                                    </div>
-                                </div>
-                                <div class="bottom">
-                                    <h5 class="repeatable">Non Repeatable</h5>
-                                    <div class="end">
-                                        <div class="read-status">Unsuccessful Read</div>
-                                        <h6 class="timestamp">Read at 2025-11-29 04:07:26</h6>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                </div>
-            </div>
-            <div class="writers">
-                <h2>Writers</h2>
-            
-                <div class="write-content-container">
-                    <div class="node-result node-writer" id="node-1-writer">
-            
-                        <h2>Node 1 (Writer 0)</h2>
-            
-                        <div class="results-content write-1-content">
-                            <div class="top">
-                                <div class="title"><b>Kate & Leopold</b></div>
-                                <div class="genre">Comedy, Fantasy, Romance</div>
-                            </div>
-                            <div class="bottom">
-                                <div class="row">
-                                    <div class="runtime-minutes">120 minutes</div>
-                                    <div class="separator">|</div>
-                                    <div class="start-year">2001</div>
-                                </div>
-                                <h6 class="last-update">Last updated on 27 Nov 2025</h6>
-                            </div>
-                        </div>
-                        <div class="read-results">
-                            <div class="top">
-                                <div class="left">
-                                    <div class="commit-time"><b>Commit Time:</b> 0.5421 seconds</div>
-                                    <div class="duration"><b>Duration:</b> 0.164 seconds</div>
-                                </div>
-                            </div>
-                            <div class="bottom">
-                                <h5 class="rows-affected"><b>2 rows affected</b></h5>
-                                <div class="end">
-                                    <div class="read-status">Unsuccessful Read</div>
-                                    <h6 class="timestamp">Read at 2025-11-29 04:07:26</h6>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-            
-                    <div class="node-result node-writer" id="node-2-writer">
-            
-                        <h2>Node 2 (Writer 1)</h2>
-            
-                        <div class="results-content write-1-content">
-                            <div class="top">
-                                <div class="title"><b>Kate & Leopold</b></div>
-                                <div class="genre">Comedy, Fantasy, Romance</div>
-                            </div>
-                            <div class="bottom">
-                                <div class="row">
-                                    <div class="runtime-minutes">120 minutes</div>
-                                    <div class="separator">|</div>
-                                    <div class="start-year">2001</div>
-                                </div>
-                                <h6 class="last-update">Last updated on 27 Nov 2025</h6>
-                            </div>
-                        </div>
-                        <div class="read-results">
-                            <div class="top">
-                                <div class="left">
-                                    <div class="commit-time"><b>Commit Time:</b> 0.5421 seconds</div>
-                                    <div class="duration"><b>Duration:</b> 0.164 seconds</div>
-                                </div>
-                            </div>
-                            <div class="bottom">
-                                <h5 class="rows-affected"><b>No rows affected</b></h5>
-                                <div class="end">
-                                    <div class="read-status">Unsuccessful Read</div>
-                                    <h6 class="timestamp">Read at 2025-11-29 04:07:26</h6>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="final-values">
-                <h2>Final Values</h2>
-                <div class="final-values-container">
-            
-                    <div class="node-result node-1-final-value">
-                        <h2>Node 1</h2>
-                        <div class="results-content final-value-content">
-                            <div class="top">
-                                <div class="title"><b>Kate & Leopold</b></div>
-                                <div class="genre">Comedy, Fantasy, Romance</div>
-                            </div>
-                            <div class="bottom">
-                                <div class="row">
-                                    <div class="runtime-minutes">120 minutes</div>
-                                    <div class="separator">|</div>
-                                    <div class="start-year">2001</div>
-                                </div>
-                                <h6 class="last-update">Last updated on 27 Nov 2025</h6>
-                            </div>
-                        </div>
-                    </div>
+        <div id="case2-node-results-container" class="node-results-container">
+          <div id="case2-original-value-section" class="original-value">
+            <h3>Original Value</h3>
+            <div
+              id="case2-original-value-container"
+              class="node-result original-value-container"
+            ></div>
+          </div>
 
-                    <div class="node-result node-2-final-value">
-                        <h2>Node 2</h2>
-                        <div class="results-content final-value-content">
-                            <div class="top">
-                                <div class="title"><b>Kate & Leopold</b></div>
-                                <div class="genre">Comedy, Fantasy, Romance</div>
-                            </div>
-                            <div class="bottom">
-                                <div class="row">
-                                    <div class="runtime-minutes">120 minutes</div>
-                                    <div class="separator">|</div>
-                                    <div class="start-year">2001</div>
-                                </div>
-                                <h6 class="last-update">Last updated on 27 Nov 2025</h6>
-                            </div>
-                        </div>
-                    </div>
+          <div id="case2-readers-section" class="readers">
+            <h3>Readers</h3>
+            <div id="case2-readers-container" class="readers-container"></div>
+          </div>
 
-                </div>
-            </div>
+          <div id="case2-writers-section" class="writers">
+            <h3>Writers</h3>
+            <div id="case2-writers-container" class="write-content-container"></div>
+          </div>
+
+          <div id="case2-final-values-section" class="final-values">
+            <h3>Final Values</h3>
+            <div
+              id="case2-final-values-container"
+              class="final-values-container"
+            ></div>
+          </div>
         </div>
-
-        <div class="break"></div>
 
         <div class="results-analysis">
-            <h2 class="consistency">Final states are not consistent across nodes</h2>
-            <div class="explanation">READ UNCOMMITTED: Allows dirty reads (reading uncommitted data) | ✗ Dirty read detected: Reader saw uncommitted changes</div>
-            
-            <div class="analysis-breakdown">
-                
-                <h2>Analysis Breakdown:</h2>
-                
-                <div class="analysis-breakdown-content">
-                    <div class="anomaly-occurrences">
-                    
-                        <p class="dirty-read-anomaly"><b>Dirty Read Occurred:</b> True</p>
-                        <p class="non-repeatable-read-anomaly"><b>Non-Repeatable Reads:</b> True</p>
-                        <p class="blocking-anomaly"><b>Blocking Occurred:</b> True</p>
-                    
-                    </div>
-                    <div class="read-write-operations">
-                        <div class="top">
-                            <p class="operation-status successful readers-succeeded"><b>2 Successful Readers</b></p>
-                            <h6 class="avg-duration-readers">with an average duration of 0.5421 seconds</h6>
-                        </div>
-                        <div class="bottom">
-                            <p class="operation-status unsuccessful writers-succeeded"><b>No Successful Writers</b></p>
-                            <h6 class="avg-duration-writers">with an average duration of 0.3287 seconds</h6>
-                        </div>
-                    </div>
+          <h2 id="consistency-val" class="consistency"></h2>
+          <div id="explanation-val" class="explanation"></div>
+
+          <div class="analysis-breakdown">
+            <h3>Analysis Breakdown:</h3>
+
+            <div class="analysis-breakdown-content">
+              <div class="anomaly-occurrences">
+                <p class="dirty-read-anomaly">
+                  <b>Dirty Read Occurred:</b> <span id="dirty-read-val"></span>
+                </p>
+
+                <p class="non-repeatable-read-anomaly">
+                  <b>Non-Repeatable Reads:</b> <span id="nonrepeat-val"></span>
+                </p>
+
+                <p class="blocking-anomaly">
+                  <b>Blocking Occurred:</b> <span id="blocking-val"></span>
+                </p>
+              </div>
+              <div class="read-write-operations">
+                <div class="top">
+                  <p class="operation-status readers-succeeded">
+                    <b>Successful Readers:</b> <span id="readers-count"></span>
+                  </p>
+                  <h6 class="avg-duration-readers">
+                    <span id="readers-duration"></span>
+                  </h6>
                 </div>
-
+                <div class="bottom">
+                  <p class="operation-status writers-succeeded">
+                    <b>Successful Writers:</b> <span id="writers-count"></span>
+                  </p>
+                  <h6 class="avg-duration-writers">
+                    <span id="writers-duration"></span>
+                  </h6>
+                </div>
+              </div>
             </div>
-
+          </div>
         </div>
 
-        <div class="json-response">
-
-            <h1>JSON Response</h1>
-
-            <div class="json-content">
-{
-"all_reads_succeeded": true,
-"analysis": {
-"blocking_observed": false,
-"data_consistent_across_nodes": true,
-"explanation": "READ COMMITTED: No dirty reads, but non-repeatable reads possible. Readers should not block each other.",
-"repeatable_reads_working": true
-},
-"concurrent_readers": 3,
-"consistent": true,
-"description": "Concurrent transactions in two or more nodes reading the same data item",
-"isolation_level": "READ COMMITTED",
-"nodes_tested": [
-"node1",
-"node2",
-"node2"
-],
-"results": {
-"node1_0": {
-    "data": {
-        "genres": "Comedy;Fantasy;Romance",
-        "last_updated": "Sat, 29 Nov 2025 03:28:42 GMT",
-        "primary_title": "Kate & Leopold",
-        "runtime_minutes": 210,
-        "start_year": 2001,
-        "tconst": "tt0035423",
-        "title_type": "movie"
-    },
-    "duration": 0.164,
-    "isolation_level": "READ COMMITTED",
-    "node": "node1",
-    "read1_time": 0.0612,
-    "read2_time": 0.1627,
-    "reader_id": 0,
-    "repeatable": true,
-    "success": true,
-    "timestamp": "2025-11-29T04:07:26.507920"
-},
-"node2_1": {
-    "data": {
-        "genres": "Comedy;Fantasy;Romance",
-        "last_updated": "Sat, 29 Nov 2025 03:28:42 GMT",
-        "primary_title": "Kate & Leopold",
-        "runtime_minutes": 210,
-        "start_year": 2001,
-        "tconst": "tt0035423",
-        "title_type": "movie"
-    },
-    "duration": 0.1627,
-    "isolation_level": "READ COMMITTED",
-    "node": "node2",
-    "read1_time": 0.0611,
-    "read2_time": 0.1622,
-    "reader_id": 1,
-    "repeatable": true,
-    "success": true,
-    "timestamp": "2025-11-29T04:07:26.507675"
-},
-"node2_2": {
-    "data": {
-        "genres": "Comedy;Fantasy;Romance",
-        "last_updated": "Sat, 29 Nov 2025 03:28:42 GMT",
-        "primary_title": "Kate & Leopold",
-        "runtime_minutes": 210,
-        "start_year": 2001,
-        "tconst": "tt0035423",
-        "title_type": "movie"
-    },
-    "duration": 0.1778,
-    "isolation_level": "READ COMMITTED",
-    "node": "node2",
-    "read1_time": 0.0755,
-    "read2_time": 0.1773,
-    "reader_id": 2,
-    "repeatable": true,
-    "success": true,
-    "timestamp": "2025-11-29T04:07:26.521383"
-}
-},
-"tconst": "tt0035423",
-"test": "concurrent_reads",
-"test_case": "Case #1"
-}
-            </div>
-
+        <div id="json-response-c2" class="json-response">
+          <h2>JSON Response</h2>
+          <div id="json-content-c2" class="json-content"></div>
         </div>
-
       </div>
 
       <div class="case-data-container" id="case-3" style="display: none">
