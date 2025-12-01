@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:80"; // Change to your backend URL
+const API_URL = "http://localhost:80";
 
 document.addEventListener("DOMContentLoaded", () => {
 

@@ -1,3 +1,5 @@
+const API_URL = "http://localhost:80"; // change to http://ccscloud.dlsu.edu.ph:60157/
+
 /********************************************
  * CASE SWITCHING
  ********************************************/
@@ -382,7 +384,7 @@ document.getElementById("case-1-form").addEventListener("submit", async (e) => {
   try {
     console.log(body);
 
-    const response = await fetch("http://localhost:80/test/concurrent-read", {
+    const response = await fetch(`${API_URL}/test/concurrent-read`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -492,7 +494,7 @@ document.getElementById("case-2-form").addEventListener("submit", async (e) => {
     console.log(body);
 
     const response = await fetch(
-      "http://localhost:80/test/read-write-conflict",
+      `${API_URL}/test/read-write-conflict`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -675,10 +677,8 @@ document.getElementById("case-3-form").addEventListener("submit", async (e) => {
   analysisContainer.style.display = "none";
 
   try {
-    console.log(body);
-
     const response = await fetch(
-      "http://localhost:80/test/concurrent-write",
+      `${API_URL}/test/concurrent-write`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
