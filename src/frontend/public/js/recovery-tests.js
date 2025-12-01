@@ -1,5 +1,5 @@
 
-const API_BASE_URL = '';
+const API_BASE_URL = "";
 
 const caseButtons = document.querySelectorAll('.case-option');
 const caseContainers = document.querySelectorAll('.case-data-container');
@@ -288,13 +288,11 @@ function populateCase1Instructions(steps, codes) {
 
 async function insertNewTitle(body, case_num, selected_node) {
     try {
-        const API_URL = `${API_BASE_URL}/title`;
-
         const btn = document.getElementById("insert");
         btn.disabled = true;
         btn.textContent = "Inserting...";
 
-        const res = await fetch(API_URL, {
+        const res = await fetch(`${API_BASE_URL}/title`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body)
@@ -322,13 +320,11 @@ async function insertNewTitle(body, case_num, selected_node) {
 
 async function checkStatus(case_num, selected_node) {
     try {
-        const API_URL = `${API_BASE_URL}/recovery/status`;
-
         const btn = document.getElementById("check-step-3");
         btn.disabled = true;
         btn.textContent = "Checking recovery status...";
 
-        const res = await fetch(API_URL, {
+        const res = await fetch(`${API_BASE_URL}/recovery/status`, {
             method: "GET",
             headers: { "Content-Type": "application/json" },
         });
